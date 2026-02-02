@@ -1,0 +1,5 @@
+{
+  "name": "Copy of PolyMnesis - Mémoire Non-Euclidienne",
+  "description": "Une application de flashcards où chaque réponse possède plusieurs faces (triggers) pour renforcer la mémoire.",
+  "requestFramePermissions": []
+}
