@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Brain, 
-  Plus, 
-  LayoutGrid, 
-  Play, 
-  Trash2, 
-  Search, 
-  ArrowRight, 
-  CheckCircle2, 
-  XCircle, 
-  RotateCcw, 
+import {
+  Brain,
+  Plus,
+  LayoutGrid,
+  Play,
+  Trash2,
+  Search,
+  ArrowRight,
+  CheckCircle2,
+  XCircle,
+  RotateCcw,
   Menu,
   ChevronRight,
   HelpCircle,
@@ -42,8 +42,8 @@ const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<Re
 // --- Sub-Components for Views ---
 
 // 1. Navigation / Layout
-const NavBar: React.FC<{ 
-  currentView: string; 
+const NavBar: React.FC<{
+  currentView: string;
   setView: (v: string) => void;
   cardCount: number;
   onOpenSettings: () => void;
@@ -52,7 +52,7 @@ const NavBar: React.FC<{
 }> = ({ currentView, setView, cardCount, onOpenSettings, isSyncing, onResetEdit }) => (
   <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
     <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-      <div 
+      <div
         onClick={() => { setView('home'); onResetEdit(); }}
         className="flex items-center gap-2 cursor-pointer group"
       >
@@ -61,26 +61,26 @@ const NavBar: React.FC<{
         </div>
         <span className="font-bold text-xl tracking-tight text-white">PolyMnesis</span>
       </div>
-      
+
       <div className="flex items-center gap-1 md:gap-4">
-        <button 
+        <button
           onClick={() => { setView('create'); onResetEdit(); }}
           className={`p-2 md:px-3 md:py-2 rounded-lg flex items-center gap-2 transition-colors ${currentView === 'create' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`}
         >
           <Plus className="w-5 h-5" />
           <span className="hidden md:inline text-sm font-medium">Créer</span>
         </button>
-        <button 
+        <button
           onClick={() => { setView('collection'); onResetEdit(); }}
           className={`p-2 md:px-3 md:py-2 rounded-lg flex items-center gap-2 transition-colors ${currentView === 'collection' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`}
         >
           <LayoutGrid className="w-5 h-5" />
           <span className="hidden md:inline text-sm font-medium">Pokedex ({cardCount})</span>
         </button>
-        
+
         <div className="w-px h-6 bg-slate-800 mx-1"></div>
 
-        <button 
+        <button
           onClick={onOpenSettings}
           className={`p-2 rounded-lg transition-colors relative ${isSyncing ? 'text-indigo-400 animate-pulse' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
           title="Paramètres de synchronisation"
@@ -88,7 +88,7 @@ const NavBar: React.FC<{
           {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Settings className="w-5 h-5" />}
         </button>
 
-        <button 
+        <button
           onClick={() => { setView('game'); onResetEdit(); }}
           className={`ml-2 p-2 md:px-3 md:py-2 rounded-lg flex items-center gap-2 transition-colors ${currentView === 'game' ? 'bg-indigo-600/20 text-indigo-300' : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-500/20'}`}
         >
@@ -113,7 +113,7 @@ const HomeView: React.FC<{ setView: (v: string) => void }> = ({ setView }) => (
     </div>
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-lg px-4">
-      <div 
+      <div
         onClick={() => setView('create')}
         className="group p-6 bg-slate-800 rounded-2xl border border-slate-700 hover:border-indigo-500 hover:bg-slate-800/80 cursor-pointer transition-all"
       >
@@ -122,7 +122,7 @@ const HomeView: React.FC<{ setView: (v: string) => void }> = ({ setView }) => (
         <p className="text-sm text-slate-400">Ajoutez de nouvelles connaissances avec plusieurs triggers.</p>
       </div>
 
-      <div 
+      <div
         onClick={() => setView('game')}
         className="group p-6 bg-slate-800 rounded-2xl border border-slate-700 hover:border-emerald-500 hover:bg-slate-800/80 cursor-pointer transition-all"
       >
@@ -135,9 +135,9 @@ const HomeView: React.FC<{ setView: (v: string) => void }> = ({ setView }) => (
 );
 
 // 3. Create View (Handles both Create and Edit)
-const CreateView: React.FC<{ 
-  onSaveCard: (c: Card) => void; 
-  initialCard?: Card | null; 
+const CreateView: React.FC<{
+  onSaveCard: (c: Card) => void;
+  initialCard?: Card | null;
   onCancel: () => void;
 }> = ({ onSaveCard, initialCard, onCancel }) => {
   const [theme, setTheme] = useState<Theme>(Theme.CULTURE_G);
@@ -170,7 +170,7 @@ const CreateView: React.FC<{
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const validTriggers = triggers.filter(t => t.trim() !== '');
-    
+
     if (!answer.trim()) {
       setErrors("La réponse est requise.");
       return;
@@ -189,7 +189,7 @@ const CreateView: React.FC<{
     };
 
     onSaveCard(newCard);
-    
+
     // Reset form only if creating new (if editing, the parent will likely switch view)
     if (!initialCard) {
       setAnswer('');
@@ -206,7 +206,7 @@ const CreateView: React.FC<{
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-6 bg-slate-800/50 p-6 rounded-2xl border border-slate-700">
-        
+
         {/* Theme Selection */}
         <div className="space-y-2">
           <label className="block text-sm font-medium text-slate-300">Thème</label>
@@ -217,8 +217,8 @@ const CreateView: React.FC<{
                 type="button"
                 onClick={() => setTheme(t)}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
-                  theme === t 
-                  ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' 
+                  theme === t
+                  ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20'
                   : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-500'
                 }`}
               >
@@ -244,15 +244,15 @@ const CreateView: React.FC<{
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <label className="block text-sm font-medium text-slate-300">Triggers (Indices)</label>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={handleAddTrigger}
               className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1"
             >
               <Plus className="w-3 h-3" /> Ajouter
             </button>
           </div>
-          
+
           <div className="space-y-3">
             {triggers.map((trigger, idx) => (
               <div key={idx} className="flex gap-2">
@@ -267,8 +267,8 @@ const CreateView: React.FC<{
                   className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
                 />
                 {triggers.length > 1 && (
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => handleRemoveTrigger(idx)}
                     className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                   >
@@ -301,8 +301,8 @@ const CreateView: React.FC<{
 };
 
 // 4. Collection View (Pokedex)
-const CollectionView: React.FC<{ 
-  cards: Card[]; 
+const CollectionView: React.FC<{
+  cards: Card[];
   onDelete: (id: string) => void;
   onEdit: (card: Card) => void;
 }> = ({ cards, onDelete, onEdit }) => {
@@ -311,7 +311,7 @@ const CollectionView: React.FC<{
 
   const filteredCards = useMemo(() => {
     return cards.filter(card => {
-      const matchesSearch = card.answer.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      const matchesSearch = card.answer.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             card.triggers.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesTheme = filterTheme === 'ALL' || card.theme === filterTheme;
       return matchesSearch && matchesTheme;
@@ -325,7 +325,7 @@ const CollectionView: React.FC<{
           <LayoutGrid className="text-indigo-400" />
           Mon Pokedex
         </h2>
-        
+
         <div className="flex gap-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -359,14 +359,14 @@ const CollectionView: React.FC<{
               <div className="flex justify-between items-start mb-3">
                 <ThemeBadge theme={card.theme} />
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
+                  <button
                     onClick={() => onEdit(card)}
                     className="text-slate-600 hover:text-indigo-400 p-1 transition-colors"
                     title="Modifier"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
-                  <button 
+                  <button
                     onClick={() => onDelete(card.id)}
                     className="text-slate-600 hover:text-red-400 p-1 transition-colors"
                     title="Supprimer"
@@ -375,9 +375,9 @@ const CollectionView: React.FC<{
                   </button>
                 </div>
               </div>
-              
+
               <h3 className="text-lg font-bold text-white mb-4">{card.answer}</h3>
-              
+
               <div className="space-y-2">
                 {card.triggers.map((trigger, i) => (
                   <div key={i} className="flex items-start gap-2 text-sm text-slate-400">
@@ -398,7 +398,7 @@ const CollectionView: React.FC<{
 const GameView: React.FC<{ cards: Card[] }> = ({ cards }) => {
   const [gameState, setGameState] = useState<GameState>(GameState.SETUP);
   const [config, setConfig] = useState<GameConfig>({ themes: [], questionCount: 5 });
-  
+
   // Game Play State
   const [queue, setQueue] = useState<Card[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -406,7 +406,7 @@ const GameView: React.FC<{ cards: Card[] }> = ({ cards }) => {
   const [userAnswer, setUserAnswer] = useState('');
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState<'IDLE' | 'CORRECT' | 'WRONG'>('IDLE');
-  
+
   // Setup Component
   const Setup = () => {
     const toggleTheme = (t: Theme) => {
@@ -421,16 +421,16 @@ const GameView: React.FC<{ cards: Card[] }> = ({ cards }) => {
 
     const handleStart = () => {
       // Filter cards by theme (if any selected, otherwise all)
-      let pool = config.themes.length > 0 
+      let pool = config.themes.length > 0
         ? cards.filter(c => config.themes.includes(c.theme))
         : cards;
-      
+
       // Shuffle
       pool = [...pool].sort(() => Math.random() - 0.5);
-      
+
       // Slice
       const gameQueue = pool.slice(0, config.questionCount);
-      
+
       if (gameQueue.length === 0) {
         alert("Pas assez de cartes pour ces critères !");
         return;
@@ -448,7 +448,7 @@ const GameView: React.FC<{ cards: Card[] }> = ({ cards }) => {
     return (
       <div className="max-w-xl mx-auto py-10 px-4">
         <h2 className="text-2xl font-bold mb-6 text-center">Configuration de la Partie</h2>
-        
+
         <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-6">
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-3">Choisir les thèmes</label>
@@ -505,7 +505,7 @@ const GameView: React.FC<{ cards: Card[] }> = ({ cards }) => {
   // Playing Component
   const Playing = () => {
     const currentCard = queue[currentIndex];
-    
+
     // Safety check
     if (!currentCard) return <div>Erreur de chargement...</div>;
 
@@ -535,7 +535,7 @@ const GameView: React.FC<{ cards: Card[] }> = ({ cards }) => {
             } else {
                 // Really wrong, move to next card
                 // Don't clear feedback immediately so user sees 'WRONG'
-                setTimeout(() => nextCard(), 1000); 
+                setTimeout(() => nextCard(), 1000);
             }
         }, 1500);
       }
@@ -568,14 +568,14 @@ const GameView: React.FC<{ cards: Card[] }> = ({ cards }) => {
         {/* Card Area */}
         <div className="w-full perspective-1000 mb-8">
           <div className="relative w-full aspect-[16/9] md:aspect-[21/9] bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl flex flex-col items-center justify-center p-8 text-center overflow-hidden">
-            
+
             {/* Background decoration */}
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-50"></div>
-            
+
             <p className="text-sm font-medium text-indigo-400 mb-2 uppercase tracking-widest">
               Trigger {currentTriggerIndex + 1}
             </p>
-            
+
             <h3 className="text-2xl md:text-3xl font-bold text-white animate-fade-in-up">
               {currentTrigger}
             </h3>
@@ -583,12 +583,12 @@ const GameView: React.FC<{ cards: Card[] }> = ({ cards }) => {
             {/* Hint dots indicating remaining triggers */}
             <div className="absolute bottom-4 flex gap-1">
               {currentCard.triggers.map((_, idx) => (
-                <div 
-                  key={idx} 
+                <div
+                  key={idx}
                   className={`w-2 h-2 rounded-full transition-colors ${
-                    idx === currentTriggerIndex 
-                      ? 'bg-indigo-500' 
-                      : idx < currentTriggerIndex 
+                    idx === currentTriggerIndex
+                      ? 'bg-indigo-500'
+                      : idx < currentTriggerIndex
                         ? 'bg-slate-600' // Past
                         : 'bg-slate-700' // Future
                   }`}
@@ -623,8 +623,8 @@ const GameView: React.FC<{ cards: Card[] }> = ({ cards }) => {
                     autoFocus
                     placeholder="Votre réponse..."
                     className={`w-full bg-slate-800 border-2 rounded-xl px-5 py-4 text-lg text-white outline-none transition-all ${
-                    feedback === 'CORRECT' ? 'border-emerald-500' : 
-                    feedback === 'WRONG' ? 'border-red-500' : 
+                    feedback === 'CORRECT' ? 'border-emerald-500' :
+                    feedback === 'WRONG' ? 'border-red-500' :
                     'border-slate-700 focus:border-indigo-500'
                     }`}
                 />
@@ -637,7 +637,7 @@ const GameView: React.FC<{ cards: Card[] }> = ({ cards }) => {
                 <ArrowRight />
             </button>
         </form>
-        
+
         <div className="mt-4">
              <Button variant="ghost" onClick={handleSkip} disabled={feedback !== 'IDLE'}>
                  <SkipForward className="w-4 h-4 mr-2" /> Passer
@@ -653,20 +653,20 @@ const GameView: React.FC<{ cards: Card[] }> = ({ cards }) => {
       <div className="inline-flex items-center justify-center p-6 bg-slate-800 rounded-full mb-8 border border-slate-700">
         <Brain className="w-16 h-16 text-indigo-400" />
       </div>
-      
+
       <h2 className="text-4xl font-bold mb-2">Session Terminée !</h2>
       <p className="text-slate-400 mb-8">Voici votre performance</p>
 
       <div className="bg-slate-800 rounded-2xl p-8 mb-8 border border-slate-700">
         <div className="text-6xl font-black text-white mb-2">{score} <span className="text-2xl text-slate-500">/ {queue.length}</span></div>
         <div className="w-full bg-slate-700 h-2 rounded-full overflow-hidden">
-          <div 
-            className="bg-indigo-500 h-full transition-all duration-1000" 
+          <div
+            className="bg-indigo-500 h-full transition-all duration-1000"
             style={{ width: `${(score / queue.length) * 100}%` }}
           />
         </div>
         <p className="mt-4 text-indigo-300 font-medium">
-            {score === queue.length ? "Parfait ! Mémoire absolue." : 
+            {score === queue.length ? "Parfait ! Mémoire absolue." :
              score > queue.length / 2 ? "Bien joué !" : "Continuez à vous entraîner."}
         </p>
       </div>
@@ -702,10 +702,10 @@ const App: React.FC = () => {
   const [cards, setCards] = useStickyState<Card[]>(INITIAL_CARDS, 'polymnesis-cards');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  
+
   // Edit State
   const [editingCard, setEditingCard] = useState<Card | null>(null);
-  
+
   // Settings / Sync State
   const [syncCreds, setSyncCreds] = useStickyState<SyncCredentials>({
     url: '',
@@ -751,7 +751,7 @@ const App: React.FC = () => {
       await upsertRemoteCard(savedCard); // upsert handles both insert and update based on ID
       setIsSyncing(false);
     }
-    
+
     // If we were editing, return to collection
     if (editingCard) {
         setEditingCard(null);
@@ -787,16 +787,16 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
-      <NavBar 
-        currentView={currentView} 
-        setView={setCurrentView} 
+      <NavBar
+        currentView={currentView}
+        setView={setCurrentView}
         cardCount={cards.length}
         onOpenSettings={() => setIsSettingsOpen(true)}
         isSyncing={isSyncing}
         onResetEdit={() => setEditingCard(null)}
       />
-      
-      <SettingsModal 
+
+      <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         credentials={syncCreds}
@@ -806,16 +806,16 @@ const App: React.FC = () => {
       <main className="container mx-auto pb-20">
         {currentView === 'home' && <HomeView setView={setCurrentView} />}
         {currentView === 'create' && (
-            <CreateView 
-                onSaveCard={handleSaveCard} 
+            <CreateView
+                onSaveCard={handleSaveCard}
                 initialCard={editingCard}
                 onCancel={handleCancelEdit}
             />
         )}
         {currentView === 'collection' && (
-            <CollectionView 
-                cards={cards} 
-                onDelete={handleDeleteCard} 
+            <CollectionView
+                cards={cards}
+                onDelete={handleDeleteCard}
                 onEdit={handleEditCard}
             />
         )}

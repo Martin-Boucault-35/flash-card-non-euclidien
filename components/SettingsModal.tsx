@@ -10,11 +10,11 @@ interface SettingsModalProps {
   onSave: (creds: SyncCredentials) => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  credentials, 
-  onSave 
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+  isOpen,
+  onClose,
+  credentials,
+  onSave
 }) => {
   const [formData, setFormData] = useState(credentials);
   const [showHelp, setShowHelp] = useState(false);
@@ -24,7 +24,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
       <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-800">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -41,7 +41,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <p className="text-sm text-slate-300 mb-2">
               Pour synchroniser vos cartes entre PC et Mobile, vous devez créer un projet gratuit sur <strong>Supabase.com</strong>.
             </p>
-            <button 
+            <button
               onClick={() => setShowHelp(!showHelp)}
               className="text-xs text-indigo-400 hover:text-indigo-300 font-medium underline"
             >
@@ -62,7 +62,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   alter table cards enable row level security;<br/>
                   create policy "Public Access" on cards for all using (true);
                 </code>
-                <p className="text-slate-500">// 3. Copiez l'URL et la Clé Anon depuis Project Settings > API</p>
+                <p className="text-slate-500">// 3. Copiez l'URL et la Clé Anon depuis Project Settings API</p>
               </div>
             )}
           </div>
@@ -70,19 +70,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">Project URL</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="https://xyz.supabase.co"
                 value={formData.url}
                 onChange={e => setFormData({...formData, url: e.target.value})}
                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">API Key (public/anon)</label>
-              <input 
-                type="password" 
+              <input
+                type="password"
                 placeholder="eyJhbGciOiJIUzI1NiIsInR5..."
                 value={formData.key}
                 onChange={e => setFormData({...formData, key: e.target.value})}
@@ -91,7 +91,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2 mt-4">
-              <input 
+              <input
                 type="checkbox"
                 id="enableSync"
                 checked={formData.enabled}
