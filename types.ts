@@ -27,3 +27,9 @@ export enum GameState {
   PLAYING = 'PLAYING',
   FINISHED = 'FINISHED'
 }
+
+export interface SyncCredentials {
+  url: string;
+  key: string;
+  enabled: boolean;
+}
