@@ -25,6 +25,21 @@ import { ThemeBadge } from './components/ThemeBadge';
 import { SettingsModal } from './components/SettingsModal';
 import { initSupabase, fetchRemoteCards, upsertRemoteCard, deleteRemoteCard } from './services/supabase';
 
+// --- UUID Generator Helper ---
+const generateUUID = (): string => {
+  // Check if crypto.randomUUID is available (modern browsers with HTTPS)
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  // Fallback: generate a UUID v4-like string
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 // --- Local Storage Helper ---
 const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] => {
   const [value, setValue] = useState<T>(() => {
@@ -181,7 +196,7 @@ const CreateView: React.FC<{
     }
 
     const newCard: Card = {
-      id: initialCard ? initialCard.id : crypto.randomUUID(), // Keep ID if editing
+      id: initialCard ? initialCard.id : generateUUID(), // Keep ID if editing
       theme,
       answer: answer.trim(),
       triggers: validTriggers,
