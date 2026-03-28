@@ -27,6 +27,8 @@ class FlashCard {
   final String answer;
   final List<String> triggers;
   final int createdAt;
+  final int leitnerBox;
+  final int nextReviewAt;
 
   FlashCard({
     required this.id,
@@ -34,7 +36,9 @@ class FlashCard {
     required this.answer,
     required this.triggers,
     required this.createdAt,
-  });
+    this.leitnerBox = 1,
+    int? nextReviewAt,
+  }) : nextReviewAt = nextReviewAt ?? createdAt;
 
   /// Crée une copie de la carte avec des modifications optionnelles
   FlashCard copyWith({
@@ -43,6 +47,8 @@ class FlashCard {
     String? answer,
     List<String>? triggers,
     int? createdAt,
+    int? leitnerBox,
+    int? nextReviewAt,
   }) {
     return FlashCard(
       id: id ?? this.id,
@@ -50,6 +56,8 @@ class FlashCard {
       answer: answer ?? this.answer,
       triggers: triggers ?? List.from(this.triggers),
       createdAt: createdAt ?? this.createdAt,
+      leitnerBox: leitnerBox ?? this.leitnerBox,
+      nextReviewAt: nextReviewAt ?? this.nextReviewAt,
     );
   }
 
@@ -57,12 +65,15 @@ class FlashCard {
   factory FlashCard.fromJson(Map<String, dynamic> json) {
     // Support both direct format and nested 'data' format from Supabase
     final data = json['data'] as Map<String, dynamic>? ?? json;
+    final createdAt = data['createdAt'] as int? ?? DateTime.now().millisecondsSinceEpoch;
     return FlashCard(
       id: json['id'] as String? ?? data['id'] as String,
       theme: FlashCardTheme.fromString(data['theme'] as String? ?? 'Culture Générale'),
       answer: data['answer'] as String? ?? '',
       triggers: List<String>.from(data['triggers'] as List? ?? []),
-      createdAt: data['createdAt'] as int? ?? DateTime.now().millisecondsSinceEpoch,
+      createdAt: createdAt,
+      leitnerBox: data['leitnerBox'] as int? ?? 1,
+      nextReviewAt: data['nextReviewAt'] as int? ?? createdAt,
     );
   }
 
@@ -74,6 +85,8 @@ class FlashCard {
       'answer': answer,
       'triggers': triggers,
       'createdAt': createdAt,
+      'leitnerBox': leitnerBox,
+      'nextReviewAt': nextReviewAt,
     };
   }
 

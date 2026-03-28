@@ -6,6 +6,7 @@ import '../models/models.dart';
 class StorageService {
   static const String _cardsKey = 'polymnesis-cards';
   static const String _syncCredsKey = 'polymnesis-sync-creds';
+  static const String _leitnerSettingsKey = 'polymnesis-leitner-settings';
 
   static SharedPreferences? _prefs;
 
@@ -60,5 +61,27 @@ class StorageService {
   static Future<void> saveSyncCredentials(SyncCredentials creds) async {
     if (_prefs == null) return;
     await _prefs!.setString(_syncCredsKey, jsonEncode(creds.toJson()));
+  }
+
+  /// Charge les paramètres Leitner
+  static LeitnerSettings loadLeitnerSettings() {
+    if (_prefs == null) return LeitnerSettings();
+
+    final String? jsonString = _prefs!.getString(_leitnerSettingsKey);
+    if (jsonString == null) return LeitnerSettings();
+
+    try {
+      final Map<String, dynamic> json = jsonDecode(jsonString);
+      return LeitnerSettings.fromJson(json);
+    } catch (e) {
+      print('Error loading leitner settings: $e');
+      return LeitnerSettings();
+    }
+  }
+
+  /// Sauvegarde les paramètres Leitner
+  static Future<void> saveLeitnerSettings(LeitnerSettings settings) async {
+    if (_prefs == null) return;
+    await _prefs!.setString(_leitnerSettingsKey, jsonEncode(settings.toJson()));
   }
 }

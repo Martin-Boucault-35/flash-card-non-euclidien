@@ -1,19 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/card_provider.dart';
 import '../theme/app_theme.dart';
 
 /// Écran d'accueil
 class HomeScreen extends StatelessWidget {
   final VoidCallback onNavigateToCreate;
   final VoidCallback onNavigateToGame;
+  final VoidCallback onNavigateToDailyGame;
 
   const HomeScreen({
     super.key,
     required this.onNavigateToCreate,
     required this.onNavigateToGame,
+    required this.onNavigateToDailyGame,
   });
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<CardProvider>();
+    final dailyCount = provider.dailyCardCount;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -78,6 +85,21 @@ class HomeScreen extends StatelessWidget {
               ),
             ],
           ),
+
+          const SizedBox(height: 16),
+
+          // Daily Game Card
+          _HomeCard(
+            icon: Icons.calendar_today,
+            iconColor: AppColors.amber200,
+            title: 'Jeu Quotidien',
+            description: dailyCount > 0
+                ? '$dailyCount carte${dailyCount > 1 ? 's' : ''} à réviser — Système Leitner'
+                : 'Aucune carte à réviser aujourd\'hui !',
+            onTap: onNavigateToDailyGame,
+            borderColor: const Color(0xFFB45309),
+            badge: dailyCount > 0 ? '$dailyCount' : null,
+          ),
         ],
       ),
     );
@@ -91,6 +113,7 @@ class _HomeCard extends StatelessWidget {
   final String description;
   final VoidCallback onTap;
   final Color borderColor;
+  final String? badge;
 
   const _HomeCard({
     required this.icon,
@@ -99,6 +122,7 @@ class _HomeCard extends StatelessWidget {
     required this.description,
     required this.onTap,
     required this.borderColor,
+    this.badge,
   });
 
   @override
@@ -115,7 +139,29 @@ class _HomeCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 40, color: iconColor),
+            Row(
+              children: [
+                Icon(icon, size: 40, color: iconColor),
+                if (badge != null) ...[
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      badge!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: iconColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
             const SizedBox(height: 16),
             Text(
               title,

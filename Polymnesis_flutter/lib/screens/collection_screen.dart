@@ -213,7 +213,13 @@ class _CardItem extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              ThemeBadge(theme: card.theme),
+              Row(
+                children: [
+                  ThemeBadge(theme: card.theme),
+                  const SizedBox(width: 8),
+                  _LeitnerBoxBadge(box: card.leitnerBox),
+                ],
+              ),
               Row(
                 children: [
                   IconButton(
@@ -265,6 +271,52 @@ class _CardItem extends StatelessWidget {
               ],
             ),
           )),
+        ],
+      ),
+    );
+  }
+}
+
+class _LeitnerBoxBadge extends StatelessWidget {
+  final int box;
+
+  const _LeitnerBoxBadge({required this.box});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.read<CardProvider>();
+    final maxBox = provider.leitnerSettings.boxCount;
+    final isMastered = box > maxBox;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isMastered
+            ? AppColors.emerald900.withValues(alpha: 0.5)
+            : AppColors.amber900.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isMastered ? AppColors.emerald700 : AppColors.amber700,
+          width: 0.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isMastered ? Icons.check_circle : Icons.inbox,
+            size: 12,
+            color: isMastered ? AppColors.emerald400 : AppColors.amber200,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            isMastered ? 'Maîtrisé' : 'Boîte $box',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isMastered ? AppColors.emerald400 : AppColors.amber200,
+            ),
+          ),
         ],
       ),
     );

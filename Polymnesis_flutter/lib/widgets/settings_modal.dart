@@ -1,23 +1,29 @@
 import 'package:flutter/material.dart';
-import '../models/sync_credentials.dart';
+import '../models/models.dart';
 import '../theme/app_theme.dart';
 import 'app_button.dart';
 
-/// Modal de paramètres pour la synchronisation Supabase
+/// Modal de paramètres
 class SettingsModal extends StatefulWidget {
   final SyncCredentials credentials;
   final Function(SyncCredentials) onSave;
+  final LeitnerSettings leitnerSettings;
+  final Function(LeitnerSettings) onSaveLeitner;
 
   const SettingsModal({
     super.key,
     required this.credentials,
     required this.onSave,
+    required this.leitnerSettings,
+    required this.onSaveLeitner,
   });
 
   static Future<void> show(
     BuildContext context,
     SyncCredentials credentials,
     Function(SyncCredentials) onSave,
+    LeitnerSettings leitnerSettings,
+    Function(LeitnerSettings) onSaveLeitner,
   ) {
     return showModalBottomSheet(
       context: context,
@@ -26,6 +32,8 @@ class SettingsModal extends StatefulWidget {
       builder: (context) => SettingsModal(
         credentials: credentials,
         onSave: onSave,
+        leitnerSettings: leitnerSettings,
+        onSaveLeitner: onSaveLeitner,
       ),
     );
   }
@@ -39,6 +47,7 @@ class _SettingsModalState extends State<SettingsModal> {
   late TextEditingController _keyController;
   late bool _enabled;
   bool _showHelp = false;
+  late List<TextEditingController> _intervalControllers;
 
   @override
   void initState() {
@@ -46,12 +55,18 @@ class _SettingsModalState extends State<SettingsModal> {
     _urlController = TextEditingController(text: widget.credentials.url);
     _keyController = TextEditingController(text: widget.credentials.key);
     _enabled = widget.credentials.enabled;
+    _intervalControllers = widget.leitnerSettings.intervals
+        .map((d) => TextEditingController(text: d.toString()))
+        .toList();
   }
 
   @override
   void dispose() {
     _urlController.dispose();
     _keyController.dispose();
+    for (final c in _intervalControllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -89,10 +104,10 @@ class _SettingsModalState extends State<SettingsModal> {
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                const Icon(Icons.cloud, color: AppColors.indigo400),
+                const Icon(Icons.settings, color: AppColors.indigo400),
                 const SizedBox(width: 12),
                 const Text(
-                  'Synchronisation Cloud',
+                  'Paramètres',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -299,6 +314,82 @@ class _SettingsModalState extends State<SettingsModal> {
 
                   const SizedBox(height: 24),
 
+                  // ==================== LEITNER SECTION ====================
+                  const Divider(color: AppColors.slate700),
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: const [
+                      Icon(Icons.inbox, size: 20, color: AppColors.amber200),
+                      SizedBox(width: 8),
+                      Text(
+                        'Système Leitner',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Configurez l\'espacement entre chaque boîte (en jours). Quand vous répondez bien, la carte monte d\'une boîte. Sinon, elle retourne en boîte 1.',
+                    style: TextStyle(fontSize: 13, color: AppColors.slate400),
+                  ),
+                  const SizedBox(height: 16),
+
+                  ...List.generate(_intervalControllers.length, (i) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 90,
+                            child: Text(
+                              'Boîte ${i + 1} → ${i + 2}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.slate300,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 60,
+                            child: TextField(
+                              controller: _intervalControllers[i],
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.white,
+                              ),
+                              decoration: InputDecoration(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
+                                fillColor: AppColors.slate950,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(color: AppColors.slate700),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'jours',
+                            style: TextStyle(fontSize: 13, color: AppColors.slate500),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+
+                  const SizedBox(height: 24),
+
                   // Buttons
                   Row(
                     children: [
@@ -312,14 +403,7 @@ class _SettingsModalState extends State<SettingsModal> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: AppButton(
-                          onPressed: () {
-                            widget.onSave(SyncCredentials(
-                              url: _urlController.text.trim(),
-                              key: _keyController.text.trim(),
-                              enabled: _enabled,
-                            ));
-                            Navigator.pop(context);
-                          },
+                          onPressed: _handleSave,
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -339,5 +423,23 @@ class _SettingsModalState extends State<SettingsModal> {
         ],
       ),
     );
+  }
+
+  void _handleSave() {
+    // Save sync credentials
+    widget.onSave(SyncCredentials(
+      url: _urlController.text.trim(),
+      key: _keyController.text.trim(),
+      enabled: _enabled,
+    ));
+
+    // Save Leitner settings
+    final intervals = _intervalControllers
+        .map((c) => int.tryParse(c.text) ?? 1)
+        .map((v) => v < 1 ? 1 : v)
+        .toList();
+    widget.onSaveLeitner(LeitnerSettings(intervals: intervals));
+
+    Navigator.pop(context);
   }
 }

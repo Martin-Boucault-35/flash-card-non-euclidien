@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'models/models.dart';
 import 'providers/providers.dart';
 import 'screens/screens.dart';
+import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/widgets.dart';
 
@@ -18,6 +19,11 @@ void main() async {
       statusBarIconBrightness: Brightness.light,
     ),
   );
+
+  // Initialize notifications
+  await NotificationService.initialize();
+  await NotificationService.requestPermission();
+  await NotificationService.scheduleDailyReminder();
 
   runApp(const PolyMnesisApp());
 }
@@ -60,6 +66,8 @@ class _MainScreenState extends State<MainScreen> {
       context,
       provider.syncCredentials,
       (creds) => provider.updateSyncCredentials(creds),
+      provider.leitnerSettings,
+      (settings) => provider.updateLeitnerSettings(settings),
     );
   }
 
@@ -183,6 +191,7 @@ class _MainScreenState extends State<MainScreen> {
         return HomeScreen(
           onNavigateToCreate: () => _navigateTo(1),
           onNavigateToGame: () => _navigateTo(3),
+          onNavigateToDailyGame: () => _navigateTo(4),
         );
       case 1:
         return CreateScreen(
@@ -203,6 +212,8 @@ class _MainScreenState extends State<MainScreen> {
         );
       case 3:
         return const GameScreen();
+      case 4:
+        return const DailyGameScreen();
       default:
         return const SizedBox.shrink();
     }
@@ -256,6 +267,16 @@ class _MainScreenState extends State<MainScreen> {
                 isSelected: _currentIndex == 3,
                 onTap: () => _navigateTo(3),
                 isPrimary: true,
+              ),
+              _NavItem(
+                icon: Icons.calendar_today_outlined,
+                selectedIcon: Icons.calendar_today,
+                label: 'Quotidien',
+                isSelected: _currentIndex == 4,
+                onTap: () => _navigateTo(4),
+                badge: provider.dailyCardCount > 0
+                    ? provider.dailyCardCount.toString()
+                    : null,
               ),
             ],
           ),

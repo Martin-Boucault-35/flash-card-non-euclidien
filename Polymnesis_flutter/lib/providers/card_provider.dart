@@ -8,6 +8,7 @@ import '../constants.dart';
 class CardProvider extends ChangeNotifier {
   List<FlashCard> _cards = [];
   SyncCredentials _syncCredentials = SyncCredentials();
+  LeitnerSettings _leitnerSettings = LeitnerSettings();
   bool _isSyncing = false;
   bool _isInitialized = false;
   FlashCard? _editingCard;
@@ -15,6 +16,7 @@ class CardProvider extends ChangeNotifier {
   // Getters
   List<FlashCard> get cards => List.unmodifiable(_cards);
   SyncCredentials get syncCredentials => _syncCredentials;
+  LeitnerSettings get leitnerSettings => _leitnerSettings;
   bool get isSyncing => _isSyncing;
   bool get isInitialized => _isInitialized;
   FlashCard? get editingCard => _editingCard;
@@ -33,6 +35,9 @@ class CardProvider extends ChangeNotifier {
 
     // Charger les credentials de sync
     _syncCredentials = StorageService.loadSyncCredentials();
+
+    // Charger les paramètres Leitner
+    _leitnerSettings = StorageService.loadLeitnerSettings();
 
     // Initialiser Supabase si configuré
     if (_syncCredentials.enabled && _syncCredentials.isConfigured) {
@@ -185,5 +190,57 @@ class CardProvider extends ChangeNotifier {
       return _cards.length;
     }
     return _cards.where((c) => themes.contains(c.theme.displayName)).length;
+  }
+
+  // ==================== Leitner System ====================
+
+  /// Récupère les cartes à réviser aujourd'hui (nextReviewAt <= maintenant)
+  List<FlashCard> getDailyCards() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return _cards
+        .where((c) => c.nextReviewAt <= now && c.leitnerBox <= _leitnerSettings.boxCount)
+        .toList()
+      ..shuffle();
+  }
+
+  /// Nombre de cartes à réviser aujourd'hui
+  int get dailyCardCount => getDailyCards().length;
+
+  /// Met à jour une carte après une bonne réponse
+  /// [easy] = true si répondu en <10s → +2 boîtes, sinon +1
+  Future<void> leitnerCorrect(FlashCard card, {bool easy = false}) async {
+    final step = easy ? 2 : 1;
+    final newBox = (card.leitnerBox + step).clamp(1, _leitnerSettings.boxCount + 1);
+    final nextReview = newBox > _leitnerSettings.boxCount
+        ? DateTime.now().add(const Duration(days: 365 * 10)).millisecondsSinceEpoch
+        : _leitnerSettings.computeNextReview(newBox);
+
+    final updated = card.copyWith(
+      leitnerBox: newBox,
+      nextReviewAt: nextReview,
+    );
+    await saveCard(updated);
+  }
+
+  /// Met à jour une carte après une mauvaise réponse (recule d'une boîte)
+  Future<void> leitnerIncorrect(FlashCard card) async {
+    final newBox = (card.leitnerBox - 1).clamp(1, _leitnerSettings.boxCount);
+    final updated = card.copyWith(
+      leitnerBox: newBox,
+      nextReviewAt: _leitnerSettings.computeNextReview(newBox),
+    );
+    await saveCard(updated);
+  }
+
+  /// Met à jour les paramètres Leitner
+  Future<void> updateLeitnerSettings(LeitnerSettings settings) async {
+    _leitnerSettings = settings;
+    await StorageService.saveLeitnerSettings(settings);
+    notifyListeners();
+  }
+
+  /// Appelé quand le jeu quotidien est terminé — annule les notifs du jour
+  Future<void> markDailyCompleted() async {
+    await NotificationService.cancelTodayReminder();
   }
 }
