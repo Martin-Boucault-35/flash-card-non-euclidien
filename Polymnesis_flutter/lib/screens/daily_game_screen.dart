@@ -101,7 +101,7 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
     if (isCorrect) {
       // Mesurer le temps de réponse
       final elapsed = DateTime.now().difference(_cardStartTime!);
-      final isEasy = elapsed.inSeconds < 10;
+      final isEasy = elapsed.inSeconds < 5;
 
       setState(() {
         _feedback = isEasy ? _FeedbackState.correctEasy : _FeedbackState.correctHard;
@@ -116,7 +116,7 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
     } else {
       final provider = context.read<CardProvider>();
       setState(() => _feedback = _FeedbackState.wrong);
-      Future.delayed(const Duration(milliseconds: 1500), () {
+      Future.delayed(const Duration(milliseconds: 3000), () {
         if (!isLastTrigger) {
           // Mauvaise réponse mais encore des triggers -> trigger suivant
           setState(() {
@@ -126,19 +126,17 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
         } else {
           // Mauvaise réponse au dernier trigger -> recule d'une boîte
           provider.leitnerIncorrect(currentCard);
-          // Réinsérer la carte 1 question plus loin dans la queue
+          // Réinsérer la carte à la fin de la queue
           _reinsertCard(currentCard);
-          Future.delayed(const Duration(milliseconds: 1000), _nextCard);
+          _nextCard();
         }
       });
     }
   }
 
-  /// Réinsère une carte ratée 1 position plus loin dans la queue
+  /// Réinsère une carte ratée à la fin de la queue
   void _reinsertCard(FlashCard card) {
-    // Insérer après la prochaine carte (1 question de gap)
-    final insertAt = (_currentIndex + 2).clamp(0, _queue.length);
-    _queue.insert(insertAt, card);
+    _queue.add(card);
   }
 
   void _handleNextTrigger() {
@@ -154,10 +152,10 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
   void _handleSkip() {
     final currentCard = _queue[_currentIndex];
     final provider = context.read<CardProvider>();
-    setState(() => _feedback = _FeedbackState.wrong);
+    setState(() => _feedback = _FeedbackState.skipped);
     provider.leitnerIncorrect(currentCard);
     _reinsertCard(currentCard);
-    Future.delayed(const Duration(milliseconds: 1000), _nextCard);
+    Future.delayed(const Duration(milliseconds: 3000), _nextCard);
   }
 
   void _nextCard() {
@@ -177,16 +175,32 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
     }
   }
 
+  static final _accentMap = {
+    'à': 'a', 'â': 'a', 'ä': 'a', 'á': 'a', 'ã': 'a',
+    'è': 'e', 'ê': 'e', 'ë': 'e', 'é': 'e',
+    'ì': 'i', 'î': 'i', 'ï': 'i', 'í': 'i',
+    'ò': 'o', 'ô': 'o', 'ö': 'o', 'ó': 'o', 'õ': 'o',
+    'ù': 'u', 'û': 'u', 'ü': 'u', 'ú': 'u',
+    'ý': 'y', 'ÿ': 'y',
+    'ñ': 'n', 'ç': 'c', 'œ': 'oe', 'æ': 'ae',
+  };
+
   String _normalize(String s) {
-    return s
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[\u0300-\u036f]'), '');
+    final lower = s.trim().toLowerCase();
+    final buf = StringBuffer();
+    for (var i = 0; i < lower.length; i++) {
+      final ch = lower[i];
+      buf.write(_accentMap[ch] ?? ch);
+    }
+    return buf.toString()
+        .replaceAll(RegExp(r"['\u2019\u2018`]"), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 }
 
 enum _DailyState { ready, empty, playing, finished }
-enum _FeedbackState { idle, correctEasy, correctHard, wrong }
+enum _FeedbackState { idle, correctEasy, correctHard, wrong, skipped }
 
 // Ready View - shows daily card count and start button
 class _ReadyView extends StatelessWidget {
@@ -517,7 +531,7 @@ class _PlayingViewState extends State<_PlayingView> {
     final currentCard = widget.queue[widget.currentIndex];
     final currentTrigger = widget.shuffledTriggers[widget.currentTriggerIndex];
     final isLastTrigger = widget.currentTriggerIndex >= widget.shuffledTriggers.length - 1;
-    final isUnderThreshold = _elapsedSeconds < 10;
+    final isUnderThreshold = _elapsedSeconds < 5;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -701,7 +715,7 @@ class _PlayingViewState extends State<_PlayingView> {
                       borderSide: BorderSide(
                         color: widget.feedback == _FeedbackState.correctEasy || widget.feedback == _FeedbackState.correctHard
                             ? AppColors.emerald500
-                            : widget.feedback == _FeedbackState.wrong
+                            : widget.feedback == _FeedbackState.wrong || widget.feedback == _FeedbackState.skipped
                                 ? AppColors.red500
                                 : AppColors.slate700,
                         width: 2,
@@ -810,6 +824,26 @@ class _PlayingViewState extends State<_PlayingView> {
             style: TextStyle(
               fontWeight: FontWeight.bold,
               color: AppColors.emerald400,
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (widget.feedback == _FeedbackState.skipped) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.skip_next, color: AppColors.red400),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              '↓ -1 boîte — Réponse : $answer',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.red400,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

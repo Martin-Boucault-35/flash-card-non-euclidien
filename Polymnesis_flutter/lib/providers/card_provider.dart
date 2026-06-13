@@ -152,11 +152,16 @@ class CardProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Filtre les cartes par thème et terme de recherche
-  List<FlashCard> filterCards({String? searchTerm, FlashCardTheme? theme}) {
+  /// Filtre les cartes par thème, boîte Leitner et terme de recherche
+  List<FlashCard> filterCards({String? searchTerm, FlashCardTheme? theme, int? leitnerBox}) {
     return _cards.where((card) {
       // Filtre par thème
       if (theme != null && card.theme != theme) {
+        return false;
+      }
+
+      // Filtre par boîte Leitner
+      if (leitnerBox != null && card.leitnerBox != leitnerBox) {
         return false;
       }
 

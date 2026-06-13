@@ -21,6 +21,7 @@ class CollectionScreen extends StatefulWidget {
 class _CollectionScreenState extends State<CollectionScreen> {
   String _searchTerm = '';
   FlashCardTheme? _filterTheme;
+  int? _filterBox;
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +29,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
     final filteredCards = provider.filterCards(
       searchTerm: _searchTerm,
       theme: _filterTheme,
+      leitnerBox: _filterBox,
     );
 
     return Column(
@@ -54,56 +56,105 @@ class _CollectionScreenState extends State<CollectionScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Search and filter
+              // Search
+              TextField(
+                onChanged: (value) => setState(() => _searchTerm = value),
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Rechercher...',
+                  prefixIcon: const Icon(Icons.search, color: AppColors.slate500, size: 20),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  fillColor: AppColors.slate800,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.slate700),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Filters row
               Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      onChanged: (value) => setState(() => _searchTerm = value),
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: 'Rechercher...',
-                        prefixIcon: const Icon(Icons.search, color: AppColors.slate500, size: 20),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                        fillColor: AppColors.slate800,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.slate700),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.slate800,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.slate700),
+                      ),
+                      child: DropdownButton<FlashCardTheme?>(
+                        value: _filterTheme,
+                        isExpanded: true,
+                        hint: const Text(
+                          'Thème',
+                          style: TextStyle(color: AppColors.slate400, fontSize: 14),
                         ),
+                        underline: const SizedBox(),
+                        dropdownColor: AppColors.slate800,
+                        icon: const Icon(Icons.arrow_drop_down, color: AppColors.slate400),
+                        items: [
+                          const DropdownMenuItem<FlashCardTheme?>(
+                            value: null,
+                            child: Text('Tous', style: TextStyle(color: Colors.white)),
+                          ),
+                          ...FlashCardTheme.values.map((theme) => DropdownMenuItem(
+                            value: theme,
+                            child: Text(
+                              theme.displayName,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          )),
+                        ],
+                        onChanged: (value) => setState(() => _filterTheme = value),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.slate800,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.slate700),
-                    ),
-                    child: DropdownButton<FlashCardTheme?>(
-                      value: _filterTheme,
-                      hint: const Text(
-                        'Thème',
-                        style: TextStyle(color: AppColors.slate400, fontSize: 14),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.slate800,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.slate700),
                       ),
-                      underline: const SizedBox(),
-                      dropdownColor: AppColors.slate800,
-                      icon: const Icon(Icons.arrow_drop_down, color: AppColors.slate400),
-                      items: [
-                        const DropdownMenuItem<FlashCardTheme?>(
-                          value: null,
-                          child: Text('Tous', style: TextStyle(color: Colors.white)),
+                      child: DropdownButton<int?>(
+                        value: _filterBox,
+                        isExpanded: true,
+                        hint: const Text(
+                          'Boîte',
+                          style: TextStyle(color: AppColors.slate400, fontSize: 14),
                         ),
-                        ...FlashCardTheme.values.map((theme) => DropdownMenuItem(
-                          value: theme,
-                          child: Text(
-                            theme.displayName,
-                            style: const TextStyle(color: Colors.white),
+                        underline: const SizedBox(),
+                        dropdownColor: AppColors.slate800,
+                        icon: const Icon(Icons.arrow_drop_down, color: AppColors.slate400),
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('Toutes', style: TextStyle(color: Colors.white)),
                           ),
-                        )),
-                      ],
-                      onChanged: (value) => setState(() => _filterTheme = value),
+                          ...List.generate(provider.leitnerSettings.boxCount, (i) {
+                            final box = i + 1;
+                            return DropdownMenuItem(
+                              value: box,
+                              child: Text(
+                                'Boîte $box',
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            );
+                          }),
+                          DropdownMenuItem(
+                            value: provider.leitnerSettings.boxCount + 1,
+                            child: const Text(
+                              'Maîtrisé',
+                              style: TextStyle(color: AppColors.emerald400),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) => setState(() => _filterBox = value),
+                      ),
                     ),
                   ),
                 ],
