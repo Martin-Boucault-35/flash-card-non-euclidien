@@ -22,9 +22,16 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
 
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.1
+  mocktail: ^1.0.4
+  # Permettent d'installer une fausse implémentation du plugin de notifications
+  # dans les tests (cf. test/helpers/test_helpers.dart).
+  plugin_platform_interface: ^2.1.8
+  flutter_local_notifications_platform_interface: ^11.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

@@ -32,6 +32,9 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
   // Ensemble des ID de cartes déjà validées (pour ne compter le score qu'une fois)
   final Set<String> _correctIds = {};
 
+  // Cartes ratées au moins une fois pendant la session courante.
+  final Set<String> _failedTodayIds = {};
+
   @override
   void dispose() {
     _answerController.dispose();
@@ -84,6 +87,7 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
       _score = 0;
       _totalAnswered = dailyCards.length;
       _correctIds.clear();
+      _failedTodayIds.clear();
       _feedback = _FeedbackState.idle;
       _answerController.clear();
       _cardStartTime = DateTime.now();
@@ -101,17 +105,25 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
     if (isCorrect) {
       // Mesurer le temps de réponse
       final elapsed = DateTime.now().difference(_cardStartTime!);
-      final isEasy = elapsed.inSeconds < 5;
+      final provider = context.read<CardProvider>();
+      final wasFailedToday = _failedTodayIds.contains(currentCard.id);
+      final wantsEasyStep = elapsed.inSeconds < 5 && !wasFailedToday;
+      final wouldJumpToMastered = wantsEasyStep && currentCard.leitnerBox + 2 > provider.leitnerSettings.boxCount;
+      final useEasyStep = wantsEasyStep && !wouldJumpToMastered;
 
       setState(() {
-        _feedback = isEasy ? _FeedbackState.correctEasy : _FeedbackState.correctHard;
+        _feedback = wouldJumpToMastered
+            ? _FeedbackState.correctSoftLanding
+            : useEasyStep
+                ? _FeedbackState.correctEasy
+                : _FeedbackState.correctHard;
         if (!_correctIds.contains(currentCard.id)) {
           _score++;
           _correctIds.add(currentCard.id);
         }
       });
-      // Bonne réponse -> monte de +2 (facile) ou +1 (dur)
-      context.read<CardProvider>().leitnerCorrect(currentCard, easy: isEasy);
+      // Bonne réponse -> monte de +2 (facile) ou +1 (dur). On évite le saut direct vers maîtrisé.
+      provider.leitnerCorrect(currentCard, easy: useEasyStep);
       Future.delayed(const Duration(milliseconds: 1500), _nextCard);
     } else {
       final provider = context.read<CardProvider>();
@@ -125,6 +137,7 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
           });
         } else {
           // Mauvaise réponse au dernier trigger -> recule d'une boîte
+          _failedTodayIds.add(currentCard.id);
           provider.leitnerIncorrect(currentCard);
           // Réinsérer la carte à la fin de la queue
           _reinsertCard(currentCard);
@@ -153,6 +166,7 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
     final currentCard = _queue[_currentIndex];
     final provider = context.read<CardProvider>();
     setState(() => _feedback = _FeedbackState.skipped);
+    _failedTodayIds.add(currentCard.id);
     provider.leitnerIncorrect(currentCard);
     _reinsertCard(currentCard);
     Future.delayed(const Duration(milliseconds: 3000), _nextCard);
@@ -183,6 +197,7 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
     'ù': 'u', 'û': 'u', 'ü': 'u', 'ú': 'u',
     'ý': 'y', 'ÿ': 'y',
     'ñ': 'n', 'ç': 'c', 'œ': 'oe', 'æ': 'ae',
+    '-': '', '’': '', '‘': '', '`': '',
   };
 
   String _normalize(String s) {
@@ -200,7 +215,7 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
 }
 
 enum _DailyState { ready, empty, playing, finished }
-enum _FeedbackState { idle, correctEasy, correctHard, wrong, skipped }
+enum _FeedbackState { idle, correctEasy, correctHard, correctSoftLanding, wrong, skipped }
 
 // Ready View - shows daily card count and start button
 class _ReadyView extends StatelessWidget {
@@ -824,6 +839,26 @@ class _PlayingViewState extends State<_PlayingView> {
             style: TextStyle(
               fontWeight: FontWeight.bold,
               color: AppColors.emerald400,
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (widget.feedback == _FeedbackState.correctSoftLanding) {
+      return const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.flag_circle, color: AppColors.cyan200),
+          SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              'Bien vu ! +1 boîte pour éviter le saut direct',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.cyan200,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
