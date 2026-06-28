@@ -99,7 +99,7 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
     if (_feedback != _FeedbackState.idle) return;
 
     final currentCard = _queue[_currentIndex];
-    final isCorrect = _normalize(_answerController.text) == _normalize(currentCard.answer);
+    final isCorrect = currentCard.matchesAnswer(_answerController.text);
     final isLastTrigger = _currentTriggerIndex >= currentCard.triggers.length - 1;
 
     if (isCorrect) {
@@ -189,29 +189,6 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
     }
   }
 
-  static final _accentMap = {
-    'à': 'a', 'â': 'a', 'ä': 'a', 'á': 'a', 'ã': 'a',
-    'è': 'e', 'ê': 'e', 'ë': 'e', 'é': 'e',
-    'ì': 'i', 'î': 'i', 'ï': 'i', 'í': 'i',
-    'ò': 'o', 'ô': 'o', 'ö': 'o', 'ó': 'o', 'õ': 'o',
-    'ù': 'u', 'û': 'u', 'ü': 'u', 'ú': 'u',
-    'ý': 'y', 'ÿ': 'y',
-    'ñ': 'n', 'ç': 'c', 'œ': 'oe', 'æ': 'ae',
-    '-': '', '’': '', '‘': '', '`': '',
-  };
-
-  String _normalize(String s) {
-    final lower = s.trim().toLowerCase();
-    final buf = StringBuffer();
-    for (var i = 0; i < lower.length; i++) {
-      final ch = lower[i];
-      buf.write(_accentMap[ch] ?? ch);
-    }
-    return buf.toString()
-        .replaceAll(RegExp(r"['\u2019\u2018`]"), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-  }
 }
 
 enum _DailyState { ready, empty, playing, finished }

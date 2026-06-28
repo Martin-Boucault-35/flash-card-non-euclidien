@@ -174,6 +174,108 @@ void main() {
       expect(a, isNot(equals(b)));
     });
   });
+
+  group('FlashCard.normalizeAnswer', () {
+    test('minuscule, trim et accents retirés', () {
+      expect(FlashCard.normalizeAnswer('  Café  '), 'cafe');
+      expect(FlashCard.normalizeAnswer('ÉLÉPHANT'), 'elephant');
+    });
+
+    test('accents étendus (å, ø, ñ, ç, ß…)', () {
+      expect(FlashCard.normalizeAnswer('Ångström'), 'angstrom');
+      expect(FlashCard.normalizeAnswer('Núñez'), 'nunez');
+      expect(FlashCard.normalizeAnswer('Strauß'), 'strauss');
+      expect(FlashCard.normalizeAnswer('Smørrebrød'), 'smorrebrod');
+    });
+
+    test('tirets, espaces et apostrophes sont équivalents (tous retirés)', () {
+      expect(FlashCard.normalizeAnswer('orang-outan'), 'orangoutan');
+      expect(FlashCard.normalizeAnswer('orang outan'), 'orangoutan');
+      expect(FlashCard.normalizeAnswer('orangoutan'), 'orangoutan');
+      expect(
+        FlashCard.normalizeAnswer("l'oreal"),
+        FlashCard.normalizeAnswer('l oreal'),
+      );
+      expect(FlashCard.normalizeAnswer('di    stefano'), 'distefano');
+    });
+  });
+
+  group('FlashCard.matchesAnswer', () {
+    final imported = FlashCard(
+      id: '1',
+      theme: FlashCardTheme.sport,
+      answer: 'Alfredo Di Stefano',
+      triggers: const ['t'],
+      createdAt: 1,
+      acceptedAnswers: const [
+        'Alfredo Di Stefano',
+        'di stefano',
+        'distephano',
+      ],
+    );
+
+    test('matche la réponse principale (casse/accents ignorés)', () {
+      expect(imported.matchesAnswer('alfredo di stefano'), isTrue);
+      expect(imported.matchesAnswer('ALFREDO DI STEFANO'), isTrue);
+    });
+
+    test('matche une variante acceptée', () {
+      expect(imported.matchesAnswer('di stefano'), isTrue);
+      expect(imported.matchesAnswer('Distephano'), isTrue);
+    });
+
+    test('refuse une réponse hors liste', () {
+      expect(imported.matchesAnswer('pele'), isFalse);
+    });
+
+    test('saisie vide -> faux', () {
+      expect(imported.matchesAnswer('   '), isFalse);
+    });
+
+    test('carte manuelle (sans variantes) ne matche que sa réponse', () {
+      final manual = FlashCard(
+        id: '2',
+        theme: FlashCardTheme.cultureG,
+        answer: 'Banane',
+        triggers: const ['t'],
+        createdAt: 1,
+      );
+      expect(manual.matchesAnswer('banane'), isTrue);
+      // Pas de variante => "la banane" reste refusé pour une carte manuelle.
+      expect(manual.matchesAnswer('la banane'), isFalse);
+    });
+  });
+
+  group('FlashCard acceptedAnswers - sérialisation', () {
+    test('round-trip toJson -> fromJson préserve acceptedAnswers', () {
+      final card = FlashCard(
+        id: 'x',
+        theme: FlashCardTheme.sport,
+        answer: 'A',
+        triggers: const ['t'],
+        createdAt: 1,
+        acceptedAnswers: const ['A', 'a bis'],
+      );
+      expect(FlashCard.fromJson(card.toJson()).acceptedAnswers, ['A', 'a bis']);
+    });
+
+    test('absent -> liste vide (rétro-compat anciennes cartes)', () {
+      final card = FlashCard.fromJson({'id': 'y', 'answer': 'a'});
+      expect(card.acceptedAnswers, isEmpty);
+    });
+
+    test('copyWith préserve acceptedAnswers', () {
+      final card = FlashCard(
+        id: 'z',
+        theme: FlashCardTheme.sport,
+        answer: 'A',
+        triggers: const ['t'],
+        createdAt: 1,
+        acceptedAnswers: const ['A', 'alt'],
+      );
+      expect(card.copyWith(answer: 'B').acceptedAnswers, ['A', 'alt']);
+    });
+  });
 }
 
 /// Petit fabricant local (le helper global est testé ailleurs).

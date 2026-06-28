@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/models.dart';
+import '../providers/providers.dart';
+import '../services/services.dart';
 import '../theme/app_theme.dart';
 import 'app_button.dart';
 
@@ -9,6 +11,11 @@ class SettingsModal extends StatefulWidget {
   final Function(SyncCredentials) onSave;
   final LeitnerSettings leitnerSettings;
   final Function(LeitnerSettings) onSaveLeitner;
+  final LtdsSettings ltdsSettings;
+  final Future<void> Function(LtdsSettings) onSaveLtds;
+
+  /// Lance l'import pour les jours donnés et renvoie un résumé.
+  final Future<LtdsImportResult> Function(List<int> days) onImport;
 
   const SettingsModal({
     super.key,
@@ -16,6 +23,9 @@ class SettingsModal extends StatefulWidget {
     required this.onSave,
     required this.leitnerSettings,
     required this.onSaveLeitner,
+    required this.ltdsSettings,
+    required this.onSaveLtds,
+    required this.onImport,
   });
 
   static Future<void> show(
@@ -24,6 +34,9 @@ class SettingsModal extends StatefulWidget {
     Function(SyncCredentials) onSave,
     LeitnerSettings leitnerSettings,
     Function(LeitnerSettings) onSaveLeitner,
+    LtdsSettings ltdsSettings,
+    Future<void> Function(LtdsSettings) onSaveLtds,
+    Future<LtdsImportResult> Function(List<int> days) onImport,
   ) {
     return showModalBottomSheet(
       context: context,
@@ -34,6 +47,9 @@ class SettingsModal extends StatefulWidget {
         onSave: onSave,
         leitnerSettings: leitnerSettings,
         onSaveLeitner: onSaveLeitner,
+        ltdsSettings: ltdsSettings,
+        onSaveLtds: onSaveLtds,
+        onImport: onImport,
       ),
     );
   }
@@ -49,6 +65,14 @@ class _SettingsModalState extends State<SettingsModal> {
   bool _showHelp = false;
   late List<TextEditingController> _intervalControllers;
 
+  // Import "La Table des Savoirs"
+  late TextEditingController _tokenController;
+  late TextEditingController _rangeController;
+  bool _showTokenHelp = false;
+  bool _importing = false;
+  String? _importMessage;
+  bool _importIsError = false;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +82,8 @@ class _SettingsModalState extends State<SettingsModal> {
     _intervalControllers = widget.leitnerSettings.intervals
         .map((d) => TextEditingController(text: d.toString()))
         .toList();
+    _tokenController = TextEditingController(text: widget.ltdsSettings.token);
+    _rangeController = TextEditingController();
   }
 
   @override
@@ -67,6 +93,8 @@ class _SettingsModalState extends State<SettingsModal> {
     for (final c in _intervalControllers) {
       c.dispose();
     }
+    _tokenController.dispose();
+    _rangeController.dispose();
     super.dispose();
   }
 
@@ -314,6 +342,13 @@ class _SettingsModalState extends State<SettingsModal> {
 
                   const SizedBox(height: 24),
 
+                  // ==================== IMPORT LTDS SECTION ================
+                  const Divider(color: AppColors.slate700),
+                  const SizedBox(height: 16),
+                  _buildLtdsSection(),
+
+                  const SizedBox(height: 24),
+
                   // ==================== LEITNER SECTION ====================
                   const Divider(color: AppColors.slate700),
                   const SizedBox(height: 16),
@@ -425,6 +460,240 @@ class _SettingsModalState extends State<SettingsModal> {
     );
   }
 
+  /// Section "Import La Table des Savoirs" : jeton + plage de jours + bouton.
+  Widget _buildLtdsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: const [
+            Icon(Icons.download_for_offline, size: 20, color: AppColors.emerald400),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Import "La Table des Savoirs"',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Crée automatiquement des cartes à partir des quiz que tu as joués '
+          '(niveaux abordable + expert).',
+          style: TextStyle(fontSize: 13, color: AppColors.slate400),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () => setState(() => _showTokenHelp = !_showTokenHelp),
+          child: Text(
+            _showTokenHelp
+                ? 'Masquer les instructions'
+                : 'Où trouver mon jeton ?',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.indigo400,
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ),
+        if (_showTokenHelp) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              '1. Connecte-toi sur latabledessavoirs.fr (sur PC)\n'
+              '2. F12 → Application → Local Storage → latabledessavoirs.fr\n'
+              '3. Clé "ltds-auth" → copie la valeur du champ "token"\n'
+              '4. Colle-la ci-dessous. (Le jeton expire : recopie-le si besoin.)',
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                color: AppColors.slate400,
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+
+        // Token
+        const Text(
+          'Jeton (token)',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppColors.slate300,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          key: const ValueKey('ltdsTokenField'),
+          controller: _tokenController,
+          obscureText: true,
+          enableSuggestions: false,
+          autocorrect: false,
+          style: const TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 13,
+            color: Colors.white,
+          ),
+          decoration: InputDecoration(
+            hintText: 'Colle ici la valeur "token" de ltds-auth',
+            fillColor: AppColors.slate950,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.slate800),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Range
+        const Text(
+          'Jours à importer',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppColors.slate300,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          key: const ValueKey('ltdsRangeField'),
+          controller: _rangeController,
+          style: const TextStyle(fontSize: 14, color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'ex : 152  ou  130-135',
+            fillColor: AppColors.slate950,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.slate800),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        SizedBox(
+          width: double.infinity,
+          child: AppButton(
+            onPressed: _importing ? null : _handleImport,
+            child: _importing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.cloud_download, size: 18),
+                      SizedBox(width: 8),
+                      Text('Importer les cartes'),
+                    ],
+                  ),
+          ),
+        ),
+
+        if (_importMessage != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: (_importIsError ? AppColors.red500 : AppColors.emerald400)
+                  .withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: (_importIsError ? AppColors.red500 : AppColors.emerald400)
+                    .withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  _importIsError ? Icons.error_outline : Icons.check_circle_outline,
+                  size: 18,
+                  color: _importIsError ? AppColors.red500 : AppColors.emerald400,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _importMessage!,
+                    style: const TextStyle(fontSize: 13, color: AppColors.slate200),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _handleImport() async {
+    final token = _tokenController.text.trim();
+    if (token.isEmpty) {
+      setState(() {
+        _importIsError = true;
+        _importMessage = 'Renseigne ton jeton avant d\'importer.';
+      });
+      return;
+    }
+
+    final List<int> days;
+    try {
+      days = LtdsImportService.parseDayRange(_rangeController.text);
+    } on FormatException catch (e) {
+      setState(() {
+        _importIsError = true;
+        _importMessage = 'Plage invalide : ${e.message}';
+      });
+      return;
+    }
+
+    setState(() {
+      _importing = true;
+      _importMessage = null;
+      _importIsError = false;
+    });
+
+    try {
+      // On enregistre d'abord le jeton (pour qu'il soit dispo côté provider).
+      await widget.onSaveLtds(LtdsSettings(token: token));
+      final result = await widget.onImport(days);
+      if (!mounted) return;
+      setState(() {
+        _importIsError = result.questionsFound == 0;
+        _importMessage = result.summary;
+      });
+    } on LtdsAuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _importIsError = true;
+        _importMessage = '$e Recopie un nouveau jeton.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _importIsError = true;
+        _importMessage = 'Erreur lors de l\'import : $e';
+      });
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
+  }
+
   void _handleSave() {
     // Save sync credentials
     widget.onSave(SyncCredentials(
@@ -439,6 +708,9 @@ class _SettingsModalState extends State<SettingsModal> {
         .map((v) => v < 1 ? 1 : v)
         .toList();
     widget.onSaveLeitner(LeitnerSettings(intervals: intervals));
+
+    // Save LTDS token
+    widget.onSaveLtds(LtdsSettings(token: _tokenController.text.trim()));
 
     Navigator.pop(context);
   }

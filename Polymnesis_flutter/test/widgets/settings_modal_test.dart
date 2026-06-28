@@ -20,6 +20,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:polymnesis/models/sync_credentials.dart';
 import 'package:polymnesis/models/leitner_settings.dart';
+import 'package:polymnesis/models/ltds_settings.dart';
+import 'package:polymnesis/providers/card_provider.dart';
 import 'package:polymnesis/widgets/settings_modal.dart';
 
 void main() {
@@ -28,10 +30,22 @@ void main() {
   // Callbacks de capture, réinitialisés avant chaque test.
   late SyncCredentials? savedCreds;
   late LeitnerSettings? savedLeitner;
+  late LtdsSettings? savedLtds;
+  late List<int>? importedDays;
+  late LtdsImportResult importResult;
 
   setUp(() {
     savedCreds = null;
     savedLeitner = null;
+    savedLtds = null;
+    importedDays = null;
+    importResult = LtdsImportResult(
+      cardsCreated: 2,
+      triggersAdded: 1,
+      questionsFound: 3,
+      daysRequested: 1,
+      daysWithData: const [152],
+    );
   });
 
   /// Monte le modal en le poussant comme route, afin que Navigator.pop()
@@ -40,6 +54,7 @@ void main() {
     WidgetTester tester, {
     required SyncCredentials credentials,
     required LeitnerSettings leitnerSettings,
+    LtdsSettings? ltdsSettings,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -56,6 +71,12 @@ void main() {
                           onSave: (c) => savedCreds = c,
                           leitnerSettings: leitnerSettings,
                           onSaveLeitner: (l) => savedLeitner = l,
+                          ltdsSettings: ltdsSettings ?? LtdsSettings(),
+                          onSaveLtds: (s) async => savedLtds = s,
+                          onImport: (days) async {
+                            importedDays = days;
+                            return importResult;
+                          },
                         ),
                       ),
                     ),
@@ -94,8 +115,9 @@ void main() {
       final textFields = tester
           .widgetList<TextField>(find.byType(TextField))
           .toList();
-      // 2 champs sync (URL, Key) + 6 champs d'intervalle = 8 TextField.
-      expect(textFields.length, 8);
+      // 2 champs sync (URL, Key) + 6 champs d'intervalle
+      // + 2 champs import LTDS (jeton, plage) = 10 TextField.
+      expect(textFields.length, 10);
 
       final intervalValues = textFields
           .where((tf) => tf.keyboardType == TextInputType.number)
@@ -239,6 +261,98 @@ void main() {
 
       expect(savedLeitner, isNotNull);
       expect(savedLeitner!.intervals, [1, 3, 7, 14, 1, 90]);
+    });
+  });
+
+  group('SettingsModal - import La Table des Savoirs', () {
+    testWidgets('affiche la section et pré-remplit le jeton existant',
+        (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(),
+        leitnerSettings: LeitnerSettings(),
+        ltdsSettings: LtdsSettings(token: 'mon-jeton'),
+      );
+
+      expect(find.text('Import "La Table des Savoirs"'), findsOneWidget);
+      expect(find.text('Importer les cartes'), findsOneWidget);
+
+      // Le champ jeton contient le jeton fourni.
+      final tokenField = tester.widget<TextField>(
+        find.byKey(const ValueKey('ltdsTokenField')),
+      );
+      expect(tokenField.controller!.text, 'mon-jeton');
+    });
+
+    testWidgets('Importer parse la plage et appelle onImport + affiche le résumé',
+        (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(),
+        leitnerSettings: LeitnerSettings(),
+        ltdsSettings: LtdsSettings(token: 'tok'),
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('ltdsRangeField')),
+        '130-132',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Importer les cartes'));
+      await tester.tap(find.text('Importer les cartes'));
+      await tester.pumpAndSettle();
+
+      // onImport reçoit les jours parsés, et le jeton a été sauvegardé.
+      expect(importedDays, [130, 131, 132]);
+      expect(savedLtds, isNotNull);
+      expect(savedLtds!.token, 'tok');
+
+      // Le résumé du résultat s'affiche.
+      expect(find.textContaining('2 carte(s) créée(s)'), findsOneWidget);
+    });
+
+    testWidgets('une plage invalide affiche une erreur sans appeler onImport',
+        (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(),
+        leitnerSettings: LeitnerSettings(),
+        ltdsSettings: LtdsSettings(token: 'tok'),
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('ltdsRangeField')),
+        'abc',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Importer les cartes'));
+      await tester.tap(find.text('Importer les cartes'));
+      await tester.pumpAndSettle();
+
+      expect(importedDays, isNull); // onImport jamais appelé
+      expect(find.textContaining('Plage invalide'), findsOneWidget);
+    });
+
+    testWidgets('sans jeton, Importer demande le jeton', (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(),
+        leitnerSettings: LeitnerSettings(),
+        ltdsSettings: LtdsSettings(), // jeton vide
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('ltdsRangeField')),
+        '152',
+      );
+      await tester.ensureVisible(find.text('Importer les cartes'));
+      await tester.tap(find.text('Importer les cartes'));
+      await tester.pumpAndSettle();
+
+      expect(importedDays, isNull);
+      expect(find.textContaining('Renseigne ton jeton'), findsOneWidget);
     });
   });
 }

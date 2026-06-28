@@ -94,7 +94,7 @@ class _GameScreenState extends State<GameScreen> {
     if (_feedback != _FeedbackState.idle) return;
 
     final currentCard = _queue[_currentIndex];
-    final isCorrect = _normalize(_answerController.text) == _normalize(currentCard.answer);
+    final isCorrect = currentCard.matchesAnswer(_answerController.text);
     final isLastTrigger = _currentTriggerIndex >= currentCard.triggers.length - 1;
 
     if (isCorrect) {
@@ -137,13 +137,6 @@ class _GameScreenState extends State<GameScreen> {
     } else {
       setState(() => _gameState = GameState.finished);
     }
-  }
-
-  String _normalize(String s) {
-    return s
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[\u0300-\u036f]'), '');
   }
 }
 

@@ -7,6 +7,7 @@ class StorageService {
   static const String _cardsKey = 'polymnesis-cards';
   static const String _syncCredsKey = 'polymnesis-sync-creds';
   static const String _leitnerSettingsKey = 'polymnesis-leitner-settings';
+  static const String _ltdsSettingsKey = 'polymnesis-ltds-settings';
 
   static SharedPreferences? _prefs;
 
@@ -83,5 +84,27 @@ class StorageService {
   static Future<void> saveLeitnerSettings(LeitnerSettings settings) async {
     if (_prefs == null) return;
     await _prefs!.setString(_leitnerSettingsKey, jsonEncode(settings.toJson()));
+  }
+
+  /// Charge les paramètres d'import "La Table des Savoirs"
+  static LtdsSettings loadLtdsSettings() {
+    if (_prefs == null) return LtdsSettings();
+
+    final String? jsonString = _prefs!.getString(_ltdsSettingsKey);
+    if (jsonString == null) return LtdsSettings();
+
+    try {
+      final Map<String, dynamic> json = jsonDecode(jsonString);
+      return LtdsSettings.fromJson(json);
+    } catch (e) {
+      print('Error loading ltds settings: $e');
+      return LtdsSettings();
+    }
+  }
+
+  /// Sauvegarde les paramètres d'import "La Table des Savoirs"
+  static Future<void> saveLtdsSettings(LtdsSettings settings) async {
+    if (_prefs == null) return;
+    await _prefs!.setString(_ltdsSettingsKey, jsonEncode(settings.toJson()));
   }
 }

@@ -30,6 +30,11 @@ class FlashCard {
   final int leitnerBox;
   final int nextReviewAt;
 
+  /// Réponses supplémentaires acceptées en plus de [answer] (variantes,
+  /// orthographes, synonymes). Vide pour les cartes créées à la main ; remplie
+  /// à l'import "La Table des Savoirs". N'est jamais affichée pendant le jeu.
+  final List<String> acceptedAnswers;
+
   FlashCard({
     required this.id,
     required this.theme,
@@ -38,6 +43,7 @@ class FlashCard {
     required this.createdAt,
     this.leitnerBox = 1,
     int? nextReviewAt,
+    this.acceptedAnswers = const [],
   }) : nextReviewAt = nextReviewAt ?? createdAt;
 
   /// Crée une copie de la carte avec des modifications optionnelles
@@ -49,6 +55,7 @@ class FlashCard {
     int? createdAt,
     int? leitnerBox,
     int? nextReviewAt,
+    List<String>? acceptedAnswers,
   }) {
     return FlashCard(
       id: id ?? this.id,
@@ -58,6 +65,7 @@ class FlashCard {
       createdAt: createdAt ?? this.createdAt,
       leitnerBox: leitnerBox ?? this.leitnerBox,
       nextReviewAt: nextReviewAt ?? this.nextReviewAt,
+      acceptedAnswers: acceptedAnswers ?? List.from(this.acceptedAnswers),
     );
   }
 
@@ -74,6 +82,8 @@ class FlashCard {
       createdAt: createdAt,
       leitnerBox: data['leitnerBox'] as int? ?? 1,
       nextReviewAt: data['nextReviewAt'] as int? ?? createdAt,
+      acceptedAnswers:
+          List<String>.from(data['acceptedAnswers'] as List? ?? const []),
     );
   }
 
@@ -87,8 +97,62 @@ class FlashCard {
       'createdAt': createdAt,
       'leitnerBox': leitnerBox,
       'nextReviewAt': nextReviewAt,
+      'acceptedAnswers': acceptedAnswers,
     };
   }
+
+  /// Toutes les réponses considérées comme correctes (principale + variantes),
+  /// après normalisation et dédoublonnage. Utilisé pour la correction en jeu.
+  List<String> get allAcceptedNormalized {
+    final set = <String>{};
+    for (final a in [answer, ...acceptedAnswers]) {
+      final n = normalizeAnswer(a);
+      if (n.isNotEmpty) set.add(n);
+    }
+    return set.toList();
+  }
+
+  /// Vrai si [input] correspond à la réponse principale OU à une variante
+  /// acceptée (comparaison après [normalizeAnswer]).
+  bool matchesAnswer(String input) {
+    final n = normalizeAnswer(input);
+    if (n.isEmpty) return false;
+    return allAcceptedNormalized.contains(n);
+  }
+
+  /// Normalisation pour comparer des réponses. On rend la comparaison tolérante :
+  /// minuscule, accents retirés (é→e, ô→o, å→a, ø→o…), puis suppression de TOUT
+  /// ce qui n'est pas lettre/chiffre (espaces, traits d'union, apostrophes,
+  /// ponctuation). Ainsi « orang-outan », « orang outan » et « orangoutan »
+  /// donnent la même chose, et on n'a pas à se soucier des accents/tirets.
+  /// Source unique partagée par les deux modes de jeu.
+  static String normalizeAnswer(String s) {
+    final lower = s.trim().toLowerCase();
+    final buf = StringBuffer();
+    for (var i = 0; i < lower.length; i++) {
+      final ch = lower[i];
+      buf.write(_accentMap[ch] ?? ch);
+    }
+    // Tout sauf [a-z0-9] est retiré (séparateurs, ponctuation, accents non mappés).
+    return buf.toString().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  /// Accents/caractères latins courants → équivalent ASCII. Les lettres non
+  /// couvertes ici tomberaient sinon dans la suppression `[^a-z0-9]`.
+  static const Map<String, String> _accentMap = {
+    'à': 'a', 'â': 'a', 'ä': 'a', 'á': 'a', 'ã': 'a', 'å': 'a', 'ā': 'a', 'ª': 'a',
+    'è': 'e', 'ê': 'e', 'ë': 'e', 'é': 'e', 'ē': 'e', 'ė': 'e', 'ę': 'e',
+    'ì': 'i', 'î': 'i', 'ï': 'i', 'í': 'i', 'ī': 'i', 'į': 'i', 'ı': 'i',
+    'ò': 'o', 'ô': 'o', 'ö': 'o', 'ó': 'o', 'õ': 'o', 'ø': 'o', 'ō': 'o',
+    'ù': 'u', 'û': 'u', 'ü': 'u', 'ú': 'u', 'ū': 'u', 'ů': 'u',
+    'ý': 'y', 'ÿ': 'y',
+    'ñ': 'n', 'ń': 'n',
+    'ç': 'c', 'ć': 'c', 'č': 'c',
+    'š': 's', 'ś': 's', 'ß': 'ss',
+    'ž': 'z', 'ź': 'z', 'ż': 'z',
+    'ł': 'l', 'đ': 'd', 'ğ': 'g', 'ð': 'd', 'þ': 'th',
+    'œ': 'oe', 'æ': 'ae',
+  };
 
   @override
   bool operator ==(Object other) {

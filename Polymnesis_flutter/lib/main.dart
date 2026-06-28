@@ -68,6 +68,9 @@ class _MainScreenState extends State<MainScreen> {
       (creds) => provider.updateSyncCredentials(creds),
       provider.leitnerSettings,
       (settings) => provider.updateLeitnerSettings(settings),
+      provider.ltdsSettings,
+      (settings) => provider.updateLtdsSettings(settings),
+      (days) => provider.importFromLtds(days: days),
     );
   }
 

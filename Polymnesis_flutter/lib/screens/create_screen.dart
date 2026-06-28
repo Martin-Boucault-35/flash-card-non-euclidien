@@ -29,6 +29,9 @@ class _CreateScreenState extends State<CreateScreen> {
   ];
   String? _error;
   bool _isEditing = false;
+  // Réponses acceptées importées (lecture seule, conservées via copyWith).
+  List<String> _acceptedAnswers = const [];
+  bool _showAccepted = false;
 
   @override
   void initState() {
@@ -47,6 +50,7 @@ class _CreateScreenState extends State<CreateScreen> {
       _isEditing = true;
       _selectedTheme = card.theme;
       _answerController.text = card.answer;
+      _acceptedAnswers = card.acceptedAnswers;
       _triggerControllers.clear();
       for (var trigger in card.triggers) {
         _triggerControllers.add(TextEditingController(text: trigger));
@@ -328,6 +332,73 @@ class _CreateScreenState extends State<CreateScreen> {
                     ),
                   );
                 }),
+
+                // Réponses acceptées (importées) — lecture seule, repliable.
+                // N'apparaît que pour les cartes importées de La Table des Savoirs.
+                if (_acceptedAnswers.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: () =>
+                        setState(() => _showAccepted = !_showAccepted),
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      children: [
+                        Icon(
+                          _showAccepted ? Icons.expand_less : Icons.expand_more,
+                          size: 18,
+                          color: AppColors.slate400,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            '${_acceptedAnswers.length} réponse(s) acceptée(s) (importées)',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.slate400,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_showAccepted) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: _acceptedAnswers
+                          .map((a) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.slate800,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border:
+                                      Border.all(color: AppColors.slate700),
+                                ),
+                                child: Text(
+                                  a,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.slate300,
+                                  ),
+                                ),
+                              ))
+                          .toList(),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Gérées automatiquement à l\'import — non modifiables ici.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.slate500,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
 
                 // Error message
                 if (_error != null) ...[
