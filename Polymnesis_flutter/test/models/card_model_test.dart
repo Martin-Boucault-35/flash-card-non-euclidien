@@ -276,6 +276,38 @@ void main() {
       expect(card.copyWith(answer: 'B').acceptedAnswers, ['A', 'alt']);
     });
   });
+
+  group('FlashCard.updatedAt', () {
+    FlashCard card({int createdAt = 1, int? updatedAt}) => FlashCard(
+          id: '1',
+          theme: FlashCardTheme.sport,
+          answer: 'A',
+          triggers: const ['t'],
+          createdAt: createdAt,
+          updatedAt: updatedAt,
+        );
+
+    test('défaut = createdAt', () {
+      expect(card(createdAt: 500).updatedAt, 500);
+    });
+
+    test('valeur explicite conservée', () {
+      expect(card(createdAt: 1, updatedAt: 999).updatedAt, 999);
+    });
+
+    test('round-trip JSON', () {
+      expect(FlashCard.fromJson(card(updatedAt: 42).toJson()).updatedAt, 42);
+    });
+
+    test('fromJson sans updatedAt retombe sur createdAt (rétro-compat)', () {
+      expect(FlashCard.fromJson({'id': 'x', 'createdAt': 7}).updatedAt, 7);
+    });
+
+    test('copyWith', () {
+      expect(card(updatedAt: 1).copyWith(updatedAt: 2).updatedAt, 2);
+      expect(card(updatedAt: 1).copyWith().updatedAt, 1);
+    });
+  });
 }
 
 /// Petit fabricant local (le helper global est testé ailleurs).

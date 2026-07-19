@@ -125,7 +125,13 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       backgroundColor: AppColors.slate900,
       appBar: _buildAppBar(provider),
-      body: _buildBody(),
+      body: Column(
+        children: [
+          if (provider.syncError && provider.syncCredentials.enabled)
+            _SyncErrorBanner(onRetry: () => provider.performSync()),
+          Expanded(child: _buildBody()),
+        ],
+      ),
       bottomNavigationBar: _buildBottomNav(),
     );
   }
@@ -280,6 +286,43 @@ class _MainScreenState extends State<MainScreen> {
                 badge: provider.dailyCardCount > 0
                     ? provider.dailyCardCount.toString()
                     : null,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bandeau non bloquant affiché quand la sync Supabase échoue (projet en pause ?).
+class _SyncErrorBanner extends StatelessWidget {
+  final VoidCallback onRetry;
+
+  const _SyncErrorBanner({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.amber900.withValues(alpha: 0.5),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.cloud_off, size: 18, color: AppColors.amber200),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Sync indisponible — réveille Supabase sur le dashboard.',
+                  style: TextStyle(fontSize: 13, color: AppColors.amber200),
+                ),
+              ),
+              TextButton(
+                onPressed: onRetry,
+                child: const Text('Réessayer',
+                    style: TextStyle(color: AppColors.amber200)),
               ),
             ],
           ),

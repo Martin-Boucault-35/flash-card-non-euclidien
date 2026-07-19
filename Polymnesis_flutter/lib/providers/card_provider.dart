@@ -57,6 +57,7 @@ class CardProvider extends ChangeNotifier {
   LeitnerSettings _leitnerSettings = LeitnerSettings();
   LtdsSettings _ltdsSettings = LtdsSettings();
   bool _isSyncing = false;
+  bool _syncError = false;
   bool _isInitialized = false;
   FlashCard? _editingCard;
 
@@ -66,6 +67,7 @@ class CardProvider extends ChangeNotifier {
   LeitnerSettings get leitnerSettings => _leitnerSettings;
   LtdsSettings get ltdsSettings => _ltdsSettings;
   bool get isSyncing => _isSyncing;
+  bool get syncError => _syncError;
   bool get isInitialized => _isInitialized;
   FlashCard? get editingCard => _editingCard;
   int get cardCount => _cards.length;
@@ -100,7 +102,23 @@ class CardProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Effectue une synchronisation avec Supabase
+  /// Cartes de démo par défaut, indexées par id (pour la détection "pristine").
+  static final Map<String, FlashCard> _seedById = {
+    for (final c in initialCards) c.id: c,
+  };
+
+  /// Vrai si [c] est une carte de démo NON modifiée (à ne pas pousser au cloud).
+  bool _isPristineSeed(FlashCard c) {
+    final seed = _seedById[c.id];
+    if (seed == null) return false;
+    return seed.answer == c.answer && listEquals(seed.triggers, c.triggers);
+  }
+
+  /// Réconcilie local ⇄ Supabase, sans perte ni doublon (dédup par réponse).
+  ///
+  /// Tire les cartes distantes, fusionne avec le local (union des triggers /
+  /// réponses acceptées, la plus récente gagne pour la boîte Leitner), pousse le
+  /// résultat et supprime les doublons distants. Idempotent.
   Future<void> performSync() async {
     if (!_syncCredentials.enabled || !SupabaseService.isReady) return;
 
@@ -110,14 +128,27 @@ class CardProvider extends ChangeNotifier {
     try {
       final remoteCards = await SupabaseService.fetchRemoteCards();
       if (remoteCards != null) {
-        // Stratégie simple: merge remote into local, prefer remote if duplicates
-        final remoteIds = remoteCards.map((c) => c.id).toSet();
-        final localOnly = _cards.where((c) => !remoteIds.contains(c.id)).toList();
-        _cards = [...remoteCards, ...localOnly];
+        final result = reconcileCards(
+          local: _cards,
+          remote: remoteCards,
+          isPristineSeed: _isPristineSeed,
+        );
+        _cards = result.merged;
         await StorageService.saveCards(_cards);
+
+        if (result.toUpsert.isNotEmpty) {
+          await SupabaseService.upsertCards(result.toUpsert);
+        }
+        if (result.remoteOrphanIds.isNotEmpty) {
+          await SupabaseService.deleteCards(result.remoteOrphanIds);
+        }
+        _syncError = false;
+      } else {
+        _syncError = true; // fetch a échoué (Supabase injoignable/en pause ?)
       }
     } catch (e) {
       debugPrint('Sync error: $e');
+      _syncError = true;
     }
 
     _isSyncing = false;
@@ -126,12 +157,15 @@ class CardProvider extends ChangeNotifier {
 
   /// Ajoute ou met à jour une carte
   Future<void> saveCard(FlashCard card) async {
-    final existingIndex = _cards.indexWhere((c) => c.id == card.id);
+    // Toute écriture utilisateur horodate la carte (arbitre de sync).
+    final stamped =
+        card.copyWith(updatedAt: DateTime.now().millisecondsSinceEpoch);
+    final existingIndex = _cards.indexWhere((c) => c.id == stamped.id);
 
     if (existingIndex != -1) {
-      _cards[existingIndex] = card;
+      _cards[existingIndex] = stamped;
     } else {
-      _cards.insert(0, card);
+      _cards.insert(0, stamped);
     }
 
     await StorageService.saveCards(_cards);
@@ -139,7 +173,7 @@ class CardProvider extends ChangeNotifier {
     if (_syncCredentials.enabled) {
       _isSyncing = true;
       notifyListeners();
-      await SupabaseService.upsertCard(card);
+      await SupabaseService.upsertCard(stamped);
       _isSyncing = false;
     }
 
@@ -388,6 +422,7 @@ class CardProvider extends ChangeNotifier {
                     ? existing.triggers
                     : [...existing.triggers, q.question],
                 acceptedAnswers: [...existing.acceptedAnswers, ...newAccepted],
+                updatedAt: DateTime.now().millisecondsSinceEpoch,
               );
               _cards[idx] = updated;
               changed[updated.id] = updated;

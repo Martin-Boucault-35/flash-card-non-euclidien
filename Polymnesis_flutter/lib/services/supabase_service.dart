@@ -107,4 +107,35 @@ class SupabaseService {
       return false;
     }
   }
+
+  /// Upsert en lot (une seule requête) pour la réconciliation de sync.
+  static Future<bool> upsertCards(List<FlashCard> cards) async {
+    if (!isReady || cards.isEmpty) return false;
+
+    try {
+      final now = DateTime.now().toIso8601String();
+      await _client!.from('cards').upsert(
+            cards
+                .map((c) => {'id': c.id, 'data': c.toJson(), 'updated_at': now})
+                .toList(),
+          );
+      return true;
+    } catch (e) {
+      print('Error bulk upserting cards: $e');
+      return false;
+    }
+  }
+
+  /// Supprime en lot les cartes dont l'id est dans [ids] (doublons distants).
+  static Future<bool> deleteCards(List<String> ids) async {
+    if (!isReady || ids.isEmpty) return false;
+
+    try {
+      await _client!.from('cards').delete().inFilter('id', ids);
+      return true;
+    } catch (e) {
+      print('Error bulk deleting cards: $e');
+      return false;
+    }
+  }
 }

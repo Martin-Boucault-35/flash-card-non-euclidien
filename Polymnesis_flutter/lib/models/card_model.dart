@@ -35,6 +35,10 @@ class FlashCard {
   /// à l'import "La Table des Savoirs". N'est jamais affichée pendant le jeu.
   final List<String> acceptedAnswers;
 
+  /// Horodatage (ms) de la dernière modification. Sert d'arbitre lors de la
+  /// réconciliation de synchronisation (la version la plus récente gagne).
+  final int updatedAt;
+
   FlashCard({
     required this.id,
     required this.theme,
@@ -44,7 +48,9 @@ class FlashCard {
     this.leitnerBox = 1,
     int? nextReviewAt,
     this.acceptedAnswers = const [],
-  }) : nextReviewAt = nextReviewAt ?? createdAt;
+    int? updatedAt,
+  })  : nextReviewAt = nextReviewAt ?? createdAt,
+        updatedAt = updatedAt ?? createdAt;
 
   /// Crée une copie de la carte avec des modifications optionnelles
   FlashCard copyWith({
@@ -56,6 +62,7 @@ class FlashCard {
     int? leitnerBox,
     int? nextReviewAt,
     List<String>? acceptedAnswers,
+    int? updatedAt,
   }) {
     return FlashCard(
       id: id ?? this.id,
@@ -66,6 +73,7 @@ class FlashCard {
       leitnerBox: leitnerBox ?? this.leitnerBox,
       nextReviewAt: nextReviewAt ?? this.nextReviewAt,
       acceptedAnswers: acceptedAnswers ?? List.from(this.acceptedAnswers),
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -84,6 +92,7 @@ class FlashCard {
       nextReviewAt: data['nextReviewAt'] as int? ?? createdAt,
       acceptedAnswers:
           List<String>.from(data['acceptedAnswers'] as List? ?? const []),
+      updatedAt: data['updatedAt'] as int? ?? createdAt,
     );
   }
 
@@ -98,6 +107,7 @@ class FlashCard {
       'leitnerBox': leitnerBox,
       'nextReviewAt': nextReviewAt,
       'acceptedAnswers': acceptedAnswers,
+      'updatedAt': updatedAt,
     };
   }
 
