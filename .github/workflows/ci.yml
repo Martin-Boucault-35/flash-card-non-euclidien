@@ -1,15 +1,23 @@
 name: CI
 
 # Analyse statique + tests. Se lance sur chaque PR (et sur main après merge).
-# Sert de garde-fou : avec la protection de branche, une PR ne peut être mergée
-# que si ce workflow est vert.
+#
+# Astuce "docs = rapide" : le job tourne TOUJOURS (pour que le check requis `test`
+# soit bien rapporté et ne bloque pas la PR), mais les étapes lourdes (Flutter)
+# ne s'exécutent QUE s'il y a un vrai changement de code. Une PR de doc passe
+# donc au vert en quelques secondes.
 
 on:
   pull_request:
   push:
     branches: [main]
 
-# Annule un run précédent encore en cours sur la même branche/PR.
+# dorny/paths-filter interroge l'API GitHub pour lister les fichiers d'une PR :
+# il lui faut ce droit en lecture (sinon "Resource not accessible by integration").
+permissions:
+  contents: read
+  pull-requests: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -17,22 +25,47 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Polymnesis_flutter # l'app est dans un sous-dossier
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - name: Détecter les changements de code
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            code:
+              - 'Polymnesis_flutter/**'
+              - '.github/workflows/**'
+
+      - name: Setup Java
+        if: steps.changes.outputs.code == 'true'
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: subosito/flutter-action@v2
+      - name: Setup Flutter
+        if: steps.changes.outputs.code == 'true'
+        uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.41.7 # = version locale, pour des builds reproductibles
+          flutter-version: 3.41.7 # = version locale, builds reproductibles
           cache: true
 
-      - run: flutter pub get
-      - run: flutter analyze
-      - run: flutter test
+      - name: Dépendances
+        if: steps.changes.outputs.code == 'true'
+        working-directory: Polymnesis_flutter
+        run: flutter pub get
+
+      - name: Analyze
+        if: steps.changes.outputs.code == 'true'
+        working-directory: Polymnesis_flutter
+        run: flutter analyze
+
+      - name: Tests
+        if: steps.changes.outputs.code == 'true'
+        working-directory: Polymnesis_flutter
+        run: flutter test
+
+      - name: Rien à tester (changement doc uniquement)
+        if: steps.changes.outputs.code != 'true'
+        run: echo "Pas de changement de code → analyse/tests sautés. ✅"
