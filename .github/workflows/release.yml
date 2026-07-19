@@ -1,0 +1,110 @@
+name: Release
+
+# Se déclenche à chaque merge sur main (tu ne pushes plus en direct).
+# Si la version du pubspec correspond à un tag qui n'existe pas encore, on
+# publie : tag vX.Y.Z + GitHub Release (notes auto + APK) + déploiement Web.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  # 1) Décide s'il faut publier (version bumpée ?) et extrait X.Y.Z.
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.v.outputs.release }}
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # nécessaire pour voir les tags existants
+      - id: v
+        working-directory: Polymnesis_flutter
+        run: |
+          VERSION=$(grep -m1 '^version:' pubspec.yaml \
+            | sed 's/version:[[:space:]]*//' | cut -d'+' -f1 | tr -d '[:space:]')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION existe déjà → pas de release (version non bumpée)."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Nouvelle version v$VERSION → release."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # 2) Build APK (+ signature si keystore) et Web, crée la Release.
+  release:
+    needs: check
+    if: needs.check.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # créer le tag + la Release
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.41.7
+          cache: true
+
+      - name: Dépendances
+        working-directory: Polymnesis_flutter
+        run: flutter pub get
+
+      - name: Signature release (si keystore configuré, sinon build debug)
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        working-directory: Polymnesis_flutter
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=upload-keystore.jks
+          EOF
+
+      - name: Build APK
+        working-directory: Polymnesis_flutter
+        run: flutter build apk --release --build-number=${{ github.run_number }}
+
+      - name: Build Web
+        working-directory: Polymnesis_flutter
+        run: flutter build web --release --base-href /flash-card-non-euclidien/
+
+      - name: Prépare l'artefact Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: Polymnesis_flutter/build/web
+
+      - name: Crée le tag + la GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check.outputs.version }}
+          name: v${{ needs.check.outputs.version }}
+          generate_release_notes: true # liste auto des PR depuis le tag précédent
+          files: Polymnesis_flutter/build/app/outputs/flutter-apk/app-release.apk
+
+  # 3) Déploie le Web sur GitHub Pages (Settings → Pages → Source = GitHub Actions).
+  deploy-pages:
+    needs: [check, release]
+    if: needs.check.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
