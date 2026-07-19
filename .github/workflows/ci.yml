@@ -1,0 +1,38 @@
+name: CI
+
+# Analyse statique + tests. Se lance sur chaque PR (et sur main après merge).
+# Sert de garde-fou : avec la protection de branche, une PR ne peut être mergée
+# que si ce workflow est vert.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Annule un run précédent encore en cours sur la même branche/PR.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Polymnesis_flutter # l'app est dans un sous-dossier
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.41.7 # = version locale, pour des builds reproductibles
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
