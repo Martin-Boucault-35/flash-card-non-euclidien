@@ -57,6 +57,8 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
           answerController: _answerController,
           feedback: _feedback,
           cardStartTime: _cardStartTime!,
+          goldenSeconds:
+              context.read<CardProvider>().leitnerSettings.goldenSeconds,
           onSubmit: _handleSubmit,
           onNextTrigger: _handleNextTrigger,
           onSkip: _handleSkip,
@@ -107,7 +109,9 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
       final elapsed = DateTime.now().difference(_cardStartTime!);
       final provider = context.read<CardProvider>();
       final wasFailedToday = _failedTodayIds.contains(currentCard.id);
-      final wantsEasyStep = elapsed.inSeconds < 5 && !wasFailedToday;
+      final goldenMs = provider.leitnerSettings.goldenSeconds * 1000;
+      final wantsEasyStep =
+          elapsed.inMilliseconds < goldenMs && !wasFailedToday;
       final wouldJumpToMastered = wantsEasyStep && currentCard.leitnerBox + 2 > provider.leitnerSettings.boxCount;
       final useEasyStep = wantsEasyStep && !wouldJumpToMastered;
 
@@ -460,6 +464,7 @@ class _PlayingView extends StatefulWidget {
   final TextEditingController answerController;
   final _FeedbackState feedback;
   final DateTime cardStartTime;
+  final int goldenSeconds;
   final VoidCallback onSubmit;
   final VoidCallback onNextTrigger;
   final VoidCallback onSkip;
@@ -472,6 +477,7 @@ class _PlayingView extends StatefulWidget {
     required this.answerController,
     required this.feedback,
     required this.cardStartTime,
+    required this.goldenSeconds,
     required this.onSubmit,
     required this.onNextTrigger,
     required this.onSkip,
@@ -523,7 +529,7 @@ class _PlayingViewState extends State<_PlayingView> {
     final currentCard = widget.queue[widget.currentIndex];
     final currentTrigger = widget.shuffledTriggers[widget.currentTriggerIndex];
     final isLastTrigger = widget.currentTriggerIndex >= widget.shuffledTriggers.length - 1;
-    final isUnderThreshold = _elapsedSeconds < 5;
+    final isUnderThreshold = _elapsedSeconds < widget.goldenSeconds;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -677,9 +683,10 @@ class _PlayingViewState extends State<_PlayingView> {
 
           const SizedBox(height: 24),
 
-          // Feedback area
-          SizedBox(
-            height: 32,
+          // Feedback area (hauteur mini pour éviter les sauts, mais peut grandir
+          // pour afficher une réponse longue en entier)
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 32),
             child: _buildFeedback(isLastTrigger, currentCard.answer),
           ),
 
@@ -851,11 +858,11 @@ class _PlayingViewState extends State<_PlayingView> {
           Flexible(
             child: Text(
               '↓ -1 boîte — Réponse : $answer',
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 color: AppColors.red400,
               ),
-              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -871,11 +878,11 @@ class _PlayingViewState extends State<_PlayingView> {
           Flexible(
             child: Text(
               isLastTrigger ? "Faux ! ↓ -1 boîte ($answer)" : 'Faux ! Trigger suivant...',
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 color: AppColors.red400,
               ),
-              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

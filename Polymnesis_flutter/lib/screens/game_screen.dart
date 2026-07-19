@@ -475,9 +475,9 @@ class _PlayingView extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // Feedback area
-          SizedBox(
-            height: 32,
+          // Feedback area (peut grandir pour afficher une réponse longue en entier)
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 32),
             child: _buildFeedback(isLastTrigger, currentCard.answer),
           ),
 
@@ -593,11 +593,11 @@ class _PlayingView extends StatelessWidget {
           Flexible(
             child: Text(
               isLastTrigger ? "Faux ! C'était: $answer" : 'Faux ! Trigger suivant...',
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 color: AppColors.red400,
               ),
-              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

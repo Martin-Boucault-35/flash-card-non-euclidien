@@ -3,10 +3,18 @@ class LeitnerSettings {
   /// Intervalles par défaut: 1j, 3j, 7j, 14j, 30j, 90j
   static const List<int> defaultIntervals = [1, 3, 7, 14, 30, 90];
 
+  /// Seuil "réponse rapide" par défaut (en secondes) : répondre en dessous
+  /// fait monter la carte de +2 boîtes au lieu de +1.
+  static const int defaultGoldenSeconds = 5;
+
   final List<int> intervals;
 
-  LeitnerSettings({List<int>? intervals})
-      : intervals = intervals ?? List.from(defaultIntervals);
+  /// Temps max (en secondes) pour décrocher le bonus "réponse rapide" (+2 boîtes).
+  final int goldenSeconds;
+
+  LeitnerSettings({List<int>? intervals, int? goldenSeconds})
+      : intervals = intervals ?? List.from(defaultIntervals),
+        goldenSeconds = goldenSeconds ?? defaultGoldenSeconds;
 
   int get boxCount => intervals.length;
 
@@ -30,16 +38,21 @@ class LeitnerSettings {
     return 'Boîte $box';
   }
 
-  LeitnerSettings copyWith({List<int>? intervals}) {
-    return LeitnerSettings(intervals: intervals ?? List.from(this.intervals));
+  LeitnerSettings copyWith({List<int>? intervals, int? goldenSeconds}) {
+    return LeitnerSettings(
+      intervals: intervals ?? List.from(this.intervals),
+      goldenSeconds: goldenSeconds ?? this.goldenSeconds,
+    );
   }
 
-  Map<String, dynamic> toJson() => {'intervals': intervals};
+  Map<String, dynamic> toJson() =>
+      {'intervals': intervals, 'goldenSeconds': goldenSeconds};
 
   factory LeitnerSettings.fromJson(Map<String, dynamic> json) {
     return LeitnerSettings(
       intervals: (json['intervals'] as List?)?.cast<int>() ??
           List.from(defaultIntervals),
+      goldenSeconds: json['goldenSeconds'] as int? ?? defaultGoldenSeconds,
     );
   }
 }

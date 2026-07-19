@@ -115,12 +115,14 @@ void main() {
       final textFields = tester
           .widgetList<TextField>(find.byType(TextField))
           .toList();
-      // 2 champs sync (URL, Key) + 6 champs d'intervalle
-      // + 2 champs import LTDS (jeton, plage) = 10 TextField.
-      expect(textFields.length, 10);
+      // 2 champs sync (URL, Key) + 6 champs d'intervalle + 1 champ "réponse
+      // rapide" + 2 champs import LTDS (jeton, plage) = 11 TextField.
+      expect(textFields.length, 11);
 
       final intervalValues = textFields
-          .where((tf) => tf.keyboardType == TextInputType.number)
+          .where((tf) =>
+              tf.keyboardType == TextInputType.number &&
+              tf.key != const ValueKey('goldenSecondsField'))
           .map((tf) => tf.controller!.text)
           .toList();
       expect(intervalValues, ['1', '3', '7', '14', '30', '90']);
@@ -217,7 +219,10 @@ void main() {
 
       // Trouver le premier champ d'intervalle (keyboardType number) et y saisir '0'.
       final numberFields = find.byWidgetPredicate(
-        (w) => w is TextField && w.keyboardType == TextInputType.number,
+        (w) =>
+            w is TextField &&
+            w.keyboardType == TextInputType.number &&
+            w.key != const ValueKey('goldenSecondsField'),
       );
       expect(numberFields, findsNWidgets(6));
 
@@ -247,7 +252,10 @@ void main() {
       );
 
       final numberFields = find.byWidgetPredicate(
-        (w) => w is TextField && w.keyboardType == TextInputType.number,
+        (w) =>
+            w is TextField &&
+            w.keyboardType == TextInputType.number &&
+            w.key != const ValueKey('goldenSecondsField'),
       );
 
       // Vider le 5e champ (valeur 30) : int.tryParse('') == null => 1.
@@ -261,6 +269,27 @@ void main() {
 
       expect(savedLeitner, isNotNull);
       expect(savedLeitner!.intervals, [1, 3, 7, 14, 1, 90]);
+    });
+
+    testWidgets('modifier le temps "réponse rapide" est enregistré',
+        (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(),
+        leitnerSettings: LeitnerSettings(),
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('goldenSecondsField')),
+        '10',
+      );
+      await tester.ensureVisible(find.text('Enregistrer'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Enregistrer'));
+      await tester.pumpAndSettle();
+
+      expect(savedLeitner, isNotNull);
+      expect(savedLeitner!.goldenSeconds, 10);
     });
   });
 

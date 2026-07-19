@@ -150,9 +150,12 @@ void main() {
   });
 
   group('LeitnerSettings.toJson / fromJson', () {
-    test('toJson expose la clé "intervals"', () {
+    test('toJson expose les clés "intervals" et "goldenSeconds"', () {
       final json = LeitnerSettings(intervals: [1, 3, 7]).toJson();
-      expect(json, {'intervals': [1, 3, 7]});
+      expect(json, {
+        'intervals': [1, 3, 7],
+        'goldenSeconds': 5,
+      });
     });
 
     test('round-trip toJson -> fromJson préserve les intervalles', () {
@@ -183,6 +186,36 @@ void main() {
       final s = LeitnerSettings.fromJson({'intervals': <int>[]});
       expect(s.intervals, isEmpty);
       expect(s.boxCount, 0);
+    });
+  });
+
+  group('LeitnerSettings.goldenSeconds', () {
+    test('vaut 5 par défaut', () {
+      expect(LeitnerSettings().goldenSeconds, 5);
+      expect(LeitnerSettings.defaultGoldenSeconds, 5);
+    });
+
+    test('valeur personnalisée conservée', () {
+      expect(LeitnerSettings(goldenSeconds: 10).goldenSeconds, 10);
+    });
+
+    test('copyWith(goldenSeconds:) surcharge sans toucher aux intervalles', () {
+      final base = LeitnerSettings(intervals: [1, 2], goldenSeconds: 3);
+      final copy = base.copyWith(goldenSeconds: 8);
+      expect(copy.goldenSeconds, 8);
+      expect(copy.intervals, [1, 2]);
+      expect(base.goldenSeconds, 3);
+    });
+
+    test('round-trip JSON préserve goldenSeconds', () {
+      final restored =
+          LeitnerSettings.fromJson(LeitnerSettings(goldenSeconds: 7).toJson());
+      expect(restored.goldenSeconds, 7);
+    });
+
+    test('fromJson sans goldenSeconds retombe sur 5', () {
+      final s = LeitnerSettings.fromJson({'intervals': [1, 3]});
+      expect(s.goldenSeconds, 5);
     });
   });
 }

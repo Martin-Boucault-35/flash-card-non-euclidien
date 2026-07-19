@@ -64,6 +64,7 @@ class _SettingsModalState extends State<SettingsModal> {
   late bool _enabled;
   bool _showHelp = false;
   late List<TextEditingController> _intervalControllers;
+  late TextEditingController _goldenController;
 
   // Import "La Table des Savoirs"
   late TextEditingController _tokenController;
@@ -82,6 +83,9 @@ class _SettingsModalState extends State<SettingsModal> {
     _intervalControllers = widget.leitnerSettings.intervals
         .map((d) => TextEditingController(text: d.toString()))
         .toList();
+    _goldenController = TextEditingController(
+      text: widget.leitnerSettings.goldenSeconds.toString(),
+    );
     _tokenController = TextEditingController(text: widget.ltdsSettings.token);
     _rangeController = TextEditingController();
   }
@@ -93,6 +97,7 @@ class _SettingsModalState extends State<SettingsModal> {
     for (final c in _intervalControllers) {
       c.dispose();
     }
+    _goldenController.dispose();
     _tokenController.dispose();
     _rangeController.dispose();
     super.dispose();
@@ -423,6 +428,49 @@ class _SettingsModalState extends State<SettingsModal> {
                     );
                   }),
 
+                  const SizedBox(height: 8),
+
+                  // Seuil "réponse rapide" (bonus +2 boîtes)
+                  Row(
+                    children: [
+                      Icon(Icons.bolt, size: 18, color: AppColors.amber200),
+                      const SizedBox(width: 6),
+                      const Expanded(
+                        child: Text(
+                          'Réponse rapide (+2 boîtes) en moins de',
+                          style: TextStyle(fontSize: 13, color: AppColors.slate300),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 60,
+                        child: TextField(
+                          key: const ValueKey('goldenSecondsField'),
+                          controller: _goldenController,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 14, color: Colors.white),
+                          decoration: InputDecoration(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
+                            fillColor: AppColors.slate950,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: AppColors.slate700),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'sec',
+                        style: TextStyle(fontSize: 13, color: AppColors.slate500),
+                      ),
+                    ],
+                  ),
+
                   const SizedBox(height: 24),
 
                   // Buttons
@@ -707,7 +755,12 @@ class _SettingsModalState extends State<SettingsModal> {
         .map((c) => int.tryParse(c.text) ?? 1)
         .map((v) => v < 1 ? 1 : v)
         .toList();
-    widget.onSaveLeitner(LeitnerSettings(intervals: intervals));
+    final golden = (int.tryParse(_goldenController.text) ??
+            LeitnerSettings.defaultGoldenSeconds)
+        .clamp(1, 60);
+    widget.onSaveLeitner(
+      LeitnerSettings(intervals: intervals, goldenSeconds: golden),
+    );
 
     // Save LTDS token
     widget.onSaveLtds(LtdsSettings(token: _tokenController.text.trim()));
