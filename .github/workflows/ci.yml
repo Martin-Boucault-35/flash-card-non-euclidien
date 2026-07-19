@@ -12,6 +12,12 @@ on:
   push:
     branches: [main]
 
+# dorny/paths-filter interroge l'API GitHub pour lister les fichiers d'une PR :
+# il lui faut ce droit en lecture (sinon "Resource not accessible by integration").
+permissions:
+  contents: read
+  pull-requests: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
