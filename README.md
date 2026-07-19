@@ -1,37 +1,104 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+
+# 🧠 PolyMnesis — Mémoire Non-Euclidienne
+
+**Des flashcards intelligentes où une réponse se cache derrière plusieurs indices,
+avec répétition espacée (Leitner) et import de quiz de culture générale.**
+
+[![CI](https://github.com/Martin-Boucault-35/flash-card-non-euclidien/actions/workflows/ci.yml/badge.svg)](https://github.com/Martin-Boucault-35/flash-card-non-euclidien/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Martin-Boucault-35/flash-card-non-euclidien?label=release)](https://github.com/Martin-Boucault-35/flash-card-non-euclidien/releases)
+
+🌐 **Version web** : https://martin-boucault-35.github.io/flash-card-non-euclidien/
+📦 **APK Android** : onglet [Releases](https://github.com/Martin-Boucault-35/flash-card-non-euclidien/releases)
+
 </div>
 
-# Run and deploy your AI Studio app
+---
 
-This contains everything you need to run your app locally.
+## 💡 Le concept
 
-View your app in AI Studio: https://ai.studio/apps/drive/1T20Atb5gHeMWKSXb_BdwyuGqmVbSuHGe
+Une flashcard classique, c'est *une question → une réponse*. Ici c'est l'inverse :
+**une réponse ↔ plusieurs indices** (les *triggers*). Exemple :
 
-## Run Locally
+> **Réponse :** Stromae
+> **Indices :** « Paul Van Haver » · « Chanteur belge, 12 mars 1985 » · « Papaoutai »
 
-### React
+Pendant le jeu, un indice tiré au hasard s'affiche ; si tu sèches, l'indice suivant
+se dévoile. C'est plus proche de la vraie mémoire (associative, « non-euclidienne »)
+qu'un simple recto/verso.
 
-tu connais tkt la classique
+## ✨ Fonctionnalités
 
-**Prerequisites:**  Node.js
+- 🃏 **Cartes réponse + N indices**, classées par thème (Classique, Histoire, Géographie,
+  Moderne, Animaux, Sciences, Sport, Culture Générale).
+- 📦 **Système de Leitner** : boîtes de révision, intervalles configurables, bonus
+  « réponse rapide » (+2 boîtes) dont le seuil est réglable.
+- 🎮 Deux modes : **entraînement** libre et **quotidien** (cartes dues du jour).
+- ✅ **Correction tolérante** : insensible à la casse, aux accents, tirets et espaces
+  (`orang-outan` = `orang outan`), plus une liste de **réponses acceptées** (variantes,
+  synonymes, fautes courantes).
+- 📥 **Import « La Table des Savoirs »** : récupère les questions d'un quiz joué et crée
+  les cartes automatiquement (bons thèmes + réponses acceptées), directement depuis les
+  paramètres de l'app.
+- ☁️ **Sync Supabase** bidirectionnelle avec **déduplication** (aucun doublon, aucune perte) —
+  restauration complète en saisissant simplement les identifiants.
+- 🔔 **Rappels quotidiens** (notifications locales).
+- 📱 **Multi-plateforme** : Android + Web (même base de code).
 
+## 🛠️ Stack
 
-1. Install dependencies:
-   `npm install`
-2. Run the app:
-   `npm run dev`
+Flutter · Provider (état) · Supabase (sync) · shared_preferences (stockage local) ·
+flutter_local_notifications · GitHub Actions (CI/CD).
 
-### Flutter
-tu connais tkt la classique
+## 📂 Structure du dépôt
 
-**Prerequisites:**  Flutter SDK
+```
+Polymnesis_flutter/   ← l'application (Flutter) — le projet principal
+Polymnesis_react/     ← prototype web initial (React, AI Studio)
+RELEASING.md          ← mémo CI/CD : versions, tags, releases, signature
+.github/workflows/    ← CI (tests), Release (APK+Web), keep-alive Supabase
+```
 
-1. Install dependencies:
-   `flutter pub get`
-2. Run the app:
-   `flutter run`
+## 🚀 Démarrer (Flutter)
 
-## connect to supabase
+Prérequis : le [SDK Flutter](https://docs.flutter.dev/get-started/install) (3.41+).
 
-si tu veux sync avec mes data supabase dm moi sur discord je te file le lien et la clé api
+```bash
+cd Polymnesis_flutter
+flutter pub get
+flutter run          # -d <device> pour cibler un tel / chrome / linux
+```
+
+Build de production :
+
+```bash
+flutter build apk --release   # Android
+flutter build web --release   # Web
+```
+
+## 🧪 Tests
+
+```bash
+cd Polymnesis_flutter
+flutter analyze
+flutter test          # ~270 tests (modèles, providers, écrans, sync)
+```
+
+La CI relance `analyze` + `test` sur chaque Pull Request.
+
+## ☁️ Synchronisation
+
+Optionnelle, via un projet **Supabase** gratuit (table `cards`). Renseigne *Project URL*
+et *anon key* dans les paramètres de l'app pour activer la sync (et retrouver tes cartes
+sur un autre appareil). La réconciliation fusionne local et cloud sans créer de doublon.
+
+## 📦 Releases & déploiement
+
+Chaque **PR mergée sur `main`** qui bumpe la version du `pubspec` déclenche
+automatiquement : un **tag `vX.Y.Z`**, une **GitHub Release** (notes auto + APK), et le
+**déploiement web** sur GitHub Pages. Détails et notions (SemVer, signature Android, tags…)
+dans **[RELEASING.md](RELEASING.md)**.
+
+## 📝 Licence
+
+Projet personnel, à but d'apprentissage. Pas de licence de distribution.
