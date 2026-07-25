@@ -71,6 +71,7 @@ class _MainScreenState extends State<MainScreen> {
       provider.ltdsSettings,
       (settings) => provider.updateLtdsSettings(settings),
       (days) => provider.importFromLtds(days: days),
+      () => provider.importLastDay(),
     );
   }
 

@@ -93,6 +93,30 @@ void main() {
     });
   });
 
+  group('getCurrentDay', () {
+    test('200 -> renvoie currentDay (endpoint /info)', () async {
+      late Uri url;
+      final client = MockClient((req) async {
+        url = req.url;
+        return jsonResponse({'currentDay': 153}, 200);
+      });
+      expect(await LtdsImportService.getCurrentDay(client: client), 153);
+      expect(url.path, '/info');
+    });
+
+    test('currentDay absent -> FormatException', () async {
+      final client = MockClient((_) async => jsonResponse({'x': 1}, 200));
+      expect(() => LtdsImportService.getCurrentDay(client: client),
+          throwsA(isA<FormatException>()));
+    });
+
+    test('non-200 -> ClientException', () async {
+      final client = MockClient((_) async => jsonResponse({}, 503));
+      expect(() => LtdsImportService.getCurrentDay(client: client),
+          throwsA(isA<http.ClientException>()));
+    });
+  });
+
   group('fetchDay', () {
     Object dayPayload() => {
           'message': 'ok',
