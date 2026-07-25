@@ -1,0 +1,91 @@
+name: Version check
+
+# Garde-fou de discipline de release : vérifie que la version du pubspec est
+# bumpée de façon COHÉRENTE avec le label de la PR.
+#   type: fix        -> bump PATCH   (1.2.3 -> 1.2.4)
+#   type: feature    -> bump MINOR   (1.2.3 -> 1.3.0)
+#   breaking-change  -> bump MAJOR   (1.2.3 -> 2.0.0)
+#   type: tech       -> libre (bump ou pas ; couvre l'infra ET les PR de release)
+# Exactement 1 label "type:" est requis.
+#
+# Se relance aussi quand on ajoute/retire un label (types: labeled/unlabeled),
+# sinon un label posé après l'ouverture ne re-déclencherait pas le check.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    env:
+      # Tableau JSON des noms de labels, ex: ["type: feature","scope: ui"]
+      LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # besoin de l'historique pour lire la version de base
+
+      - name: Vérifier le bump vs le label
+        run: |
+          FILE=Polymnesis_flutter/pubspec.yaml
+          fail() { echo "::error::$1"; exit 1; }
+
+          version_of() { # $1 = ref git (vide = arbre de travail = branche PR)
+            local line
+            if [ -z "$1" ]; then
+              line=$(grep -m1 '^version:' "$FILE")
+            else
+              line=$(git show "$1:$FILE" | grep -m1 '^version:')
+            fi
+            printf '%s' "$line" | sed 's/version:[[:space:]]*//' | cut -d'+' -f1 \
+              | tr -d '[:space:]'
+          }
+
+          PR_VER=$(version_of "")
+          BASE_VER=$(version_of "$BASE_SHA")
+          [ -n "$PR_VER" ] || fail "Version introuvable dans $FILE (branche PR)."
+          [ -n "$BASE_VER" ] || fail "Version introuvable dans $FILE (base)."
+          echo "Base $BASE_VER  →  PR $PR_VER"
+
+          IFS=. read -r bA bB bC <<<"$BASE_VER"
+          IFS=. read -r pA pB pC <<<"$PR_VER"
+          for v in "$bA" "$bB" "$bC" "$pA" "$pB" "$pC"; do
+            case "$v" in ''|*[!0-9]*)
+              fail "Version non SemVer X.Y.Z (base=$BASE_VER pr=$PR_VER).";;
+            esac
+          done
+
+          if [ "$pA.$pB.$pC" = "$bA.$bB.$bC" ]; then bump=none
+          elif [ "$pA" -eq $((bA+1)) ] && [ "$pB" -eq 0 ] && [ "$pC" -eq 0 ]; then bump=major
+          elif [ "$pA" -eq "$bA" ] && [ "$pB" -eq $((bB+1)) ] && [ "$pC" -eq 0 ]; then bump=minor
+          elif [ "$pA" -eq "$bA" ] && [ "$pB" -eq "$bB" ] && [ "$pC" -eq $((bC+1)) ]; then bump=patch
+          else bump=invalid; fi
+          echo "Bump détecté : $bump"
+
+          # Exactement 1 label type:
+          type_count=$(printf '%s' "$LABELS" | grep -oE '"type: [^"]+"' | wc -l | tr -d ' ')
+          [ "${type_count:-0}" -eq 1 ] \
+            || fail "Exactement 1 label 'type:' requis (feature/fix/tech). Trouvé : ${type_count:-0}."
+
+          # Bump attendu
+          if printf '%s' "$LABELS" | grep -q '"breaking-change"'; then expected=major
+          elif printf '%s' "$LABELS" | grep -q '"type: feature"'; then expected=minor
+          elif printf '%s' "$LABELS" | grep -q '"type: fix"'; then expected=patch
+          else expected=flex; fi
+
+          [ "$bump" != invalid ] \
+            || fail "Incrément incohérent ($BASE_VER → $PR_VER) : attendu un +1 propre sur MAJOR, MINOR ou PATCH."
+
+          case "$expected" in
+            major) [ "$bump" = major ] || fail "Label breaking-change → MAJOR attendu ($BASE_VER → $((bA+1)).0.0), vu : $bump." ;;
+            minor) [ "$bump" = minor ] || fail "Label type: feature → MINOR attendu ($BASE_VER → $bA.$((bB+1)).0), vu : $bump." ;;
+            patch) [ "$bump" = patch ] || fail "Label type: fix → PATCH attendu ($BASE_VER → $bA.$bB.$((bC+1))), vu : $bump." ;;
+            flex)  echo "Label type: tech → pas de contrainte de bump." ;;
+          esac
+
+          echo "✅ Version cohérente avec le label (attendu=$expected, bump=$bump)."
