@@ -2,7 +2,7 @@ name: polymnesis
 description: "PolyMnesis - Mémoire Non-Euclidienne. Application de flashcards intelligentes."
 publish_to: 'none'
 
-version: 1.0.1+2
+version: 1.1.0+3
 
 environment:
   sdk: ^3.10.0
