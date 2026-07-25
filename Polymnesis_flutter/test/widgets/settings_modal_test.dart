@@ -27,6 +27,7 @@ void main() {
   late LeitnerSettings? savedLeitner;
   late LtdsSettings? savedLtds;
   late List<int>? importedDays;
+  late bool lastDayImported;
   late LtdsImportResult importResult;
 
   setUp(() {
@@ -34,6 +35,7 @@ void main() {
     savedLeitner = null;
     savedLtds = null;
     importedDays = null;
+    lastDayImported = false;
     importResult = LtdsImportResult(
       cardsCreated: 2,
       triggersAdded: 1,
@@ -70,6 +72,10 @@ void main() {
                           onSaveLtds: (s) async => savedLtds = s,
                           onImport: (days) async {
                             importedDays = days;
+                            return importResult;
+                          },
+                          onImportLastDay: () async {
+                            lastDayImported = true;
                             return importResult;
                           },
                         ),
@@ -285,6 +291,26 @@ void main() {
         find.byKey(const ValueKey('ltdsTokenField')),
       );
       expect(tokenField.controller!.text, 'mon-jeton');
+    });
+
+    testWidgets('le bouton "dernier jour" appelle onImportLastDay',
+        (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(),
+        leitnerSettings: LeitnerSettings(),
+        ltdsSettings: LtdsSettings(token: 'tok'),
+      );
+
+      await openTab(tester, 'Import');
+      await tester.ensureVisible(find.text('Importer le dernier jour'));
+      await tester.tap(find.text('Importer le dernier jour'));
+      await tester.pumpAndSettle();
+
+      expect(lastDayImported, isTrue);
+      expect(savedLtds, isNotNull); // le jeton est sauvegardé avant l'import
+      expect(savedLtds!.token, 'tok');
+      expect(find.textContaining('2 carte(s) créée(s)'), findsOneWidget);
     });
 
     testWidgets('Importer parse la plage et appelle onImport + affiche le résumé',

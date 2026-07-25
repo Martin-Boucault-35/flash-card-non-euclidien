@@ -17,6 +17,9 @@ class SettingsModal extends StatefulWidget {
   /// Lance l'import pour les jours donnés et renvoie un résumé.
   final Future<LtdsImportResult> Function(List<int> days) onImport;
 
+  /// Lance l'import du dernier jour (jour courant − 1) et renvoie un résumé.
+  final Future<LtdsImportResult> Function() onImportLastDay;
+
   const SettingsModal({
     super.key,
     required this.credentials,
@@ -26,6 +29,7 @@ class SettingsModal extends StatefulWidget {
     required this.ltdsSettings,
     required this.onSaveLtds,
     required this.onImport,
+    required this.onImportLastDay,
   });
 
   static Future<void> show(
@@ -37,6 +41,7 @@ class SettingsModal extends StatefulWidget {
     LtdsSettings ltdsSettings,
     Future<void> Function(LtdsSettings) onSaveLtds,
     Future<LtdsImportResult> Function(List<int> days) onImport,
+    Future<LtdsImportResult> Function() onImportLastDay,
   ) {
     return showModalBottomSheet(
       context: context,
@@ -50,6 +55,7 @@ class SettingsModal extends StatefulWidget {
         ltdsSettings: ltdsSettings,
         onSaveLtds: onSaveLtds,
         onImport: onImport,
+        onImportLastDay: onImportLastDay,
       ),
     );
   }
@@ -73,7 +79,10 @@ class _SettingsModalState extends State<SettingsModal>
   late TextEditingController _tokenController;
   late TextEditingController _rangeController;
   bool _showTokenHelp = false;
-  bool _importing = false;
+  // Un seul import à la fois, mais on distingue quel bouton tourne (spinner).
+  bool _importingLast = false;
+  bool _importingRange = false;
+  bool get _importing => _importingLast || _importingRange;
   String? _importMessage;
   bool _importIsError = false;
 
@@ -626,6 +635,43 @@ class _SettingsModalState extends State<SettingsModal>
         ),
         const SizedBox(height: 16),
 
+        // Bouton "jour actuel" (cas le plus courant)
+        SizedBox(
+          width: double.infinity,
+          child: AppButton(
+            onPressed: _importing ? null : _handleImportLastDay,
+            child: _importingLast
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.today, size: 18),
+                      SizedBox(width: 8),
+                      Text('Importer le dernier jour'),
+                    ],
+                  ),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+        const Row(
+          children: [
+            Expanded(child: Divider(color: AppColors.slate700)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Text('ou une plage précise',
+                  style: TextStyle(fontSize: 12, color: AppColors.slate500)),
+            ),
+            Expanded(child: Divider(color: AppColors.slate700)),
+          ],
+        ),
+        const SizedBox(height: 16),
+
         // Range
         const Text(
           'Jours à importer',
@@ -655,7 +701,7 @@ class _SettingsModalState extends State<SettingsModal>
           width: double.infinity,
           child: AppButton(
             onPressed: _importing ? null : _handleImport,
-            child: _importing
+            child: _importingRange
                 ? const SizedBox(
                     width: 18,
                     height: 18,
@@ -711,6 +757,48 @@ class _SettingsModalState extends State<SettingsModal>
     );
   }
 
+  /// Import du dernier jour : sauve le jeton puis délègue à onImportLastDay.
+  Future<void> _handleImportLastDay() async {
+    final token = _tokenController.text.trim();
+    if (token.isEmpty) {
+      setState(() {
+        _importIsError = true;
+        _importMessage = 'Renseigne ton jeton avant d\'importer.';
+      });
+      return;
+    }
+
+    setState(() {
+      _importingLast = true;
+      _importMessage = null;
+      _importIsError = false;
+    });
+
+    try {
+      await widget.onSaveLtds(LtdsSettings(token: token));
+      final result = await widget.onImportLastDay();
+      if (!mounted) return;
+      setState(() {
+        _importIsError = result.questionsFound == 0;
+        _importMessage = result.summary;
+      });
+    } on LtdsAuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _importIsError = true;
+        _importMessage = '$e Recopie un nouveau jeton.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _importIsError = true;
+        _importMessage = 'Erreur lors de l\'import : $e';
+      });
+    } finally {
+      if (mounted) setState(() => _importingLast = false);
+    }
+  }
+
   Future<void> _handleImport() async {
     final token = _tokenController.text.trim();
     if (token.isEmpty) {
@@ -733,7 +821,7 @@ class _SettingsModalState extends State<SettingsModal>
     }
 
     setState(() {
-      _importing = true;
+      _importingRange = true;
       _importMessage = null;
       _importIsError = false;
     });
@@ -760,7 +848,7 @@ class _SettingsModalState extends State<SettingsModal>
         _importMessage = 'Erreur lors de l\'import : $e';
       });
     } finally {
-      if (mounted) setState(() => _importing = false);
+      if (mounted) setState(() => _importingRange = false);
     }
   }
 

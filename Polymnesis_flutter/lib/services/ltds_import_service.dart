@@ -56,6 +56,31 @@ class LtdsImportService {
       'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
+  /// Récupère le numéro du jour courant du site via l'endpoint public `/info`
+  /// (pas besoin de jeton). Lève en cas d'erreur réseau ou de réponse invalide.
+  static Future<int> getCurrentDay({http.Client? client}) async {
+    final httpClient = client ?? http.Client();
+    final ownsClient = client == null;
+    try {
+      final uri = Uri.parse('$apiBase/info');
+      final response = await httpClient.get(uri, headers: {
+        'Accept': 'application/json',
+        'User-Agent': _userAgent,
+      });
+      if (response.statusCode != 200) {
+        throw http.ClientException('HTTP ${response.statusCode} pour $uri', uri);
+      }
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      final day = (data is Map) ? data['currentDay'] : null;
+      if (day is! int) {
+        throw const FormatException('currentDay absent de la réponse /info.');
+      }
+      return day;
+    } finally {
+      if (ownsClient) httpClient.close();
+    }
+  }
+
   /// Table de correspondance thème du site -> thème de l'app.
   /// Clés normalisées (minuscules, sans accents). Voir [_normalize].
   static final Map<String, FlashCardTheme> _themeMap = {

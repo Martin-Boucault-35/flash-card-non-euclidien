@@ -338,6 +338,15 @@ class CardProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Importe le **dernier jour** = jour courant − 1. On vise la veille plutôt
+  /// que le jour même pour un résultat déterministe (le quiz d'hier est terminé
+  /// et joué, alors que celui du jour peut être « trop tôt »). Récupère le jour
+  /// courant via `/info` puis réutilise [importFromLtds].
+  Future<LtdsImportResult> importLastDay({http.Client? client}) async {
+    final day = await LtdsImportService.getCurrentDay(client: client) - 1;
+    return importFromLtds(days: [day], client: client);
+  }
+
   /// Importe les cartes des quiz "La Table des Savoirs" pour les [days] donnés.
   ///
   /// Récupère les deux niveaux (abordable + expert). Chaque question devient une

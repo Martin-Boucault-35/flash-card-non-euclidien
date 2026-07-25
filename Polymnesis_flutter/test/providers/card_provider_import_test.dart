@@ -219,6 +219,29 @@ void main() {
     });
   });
 
+  group('importLastDay', () {
+    test('récupère le jour courant via /info puis importe le jour précédent',
+        () async {
+      seedPrefs(cards: [sentinel()]);
+      final provider = await makeInitializedProvider();
+      await provider.updateLtdsSettings(LtdsSettings(token: 'tok'));
+
+      // /info dit jour courant = 152 → on doit importer le 151 (la veille).
+      final client = clientFor({
+        '/info': {'currentDay': 152},
+        '/game/facile/151': dayWith([
+          q(1, 'Question d\'hier ?', 'Sport', 'Réponse'),
+        ]),
+      });
+
+      final result = await provider.importLastDay(client: client);
+
+      expect(result.cardsCreated, 1);
+      expect(result.daysWithData, [151]);
+      expect(provider.cards.any((c) => c.answer == 'Réponse'), isTrue);
+    });
+  });
+
   group('importFromLtds - erreurs', () {
     test('jeton vide -> LtdsAuthException', () async {
       seedPrefs(cards: []);
