@@ -161,9 +161,10 @@ void main() {
       await tester.tap(find.byIcon(Icons.settings));
       await tester.pumpAndSettle();
 
-      // _openSettings() a présenté la SettingsModal.
+      // _openSettings() a présenté la SettingsModal (avec ses onglets).
       expect(find.text('Paramètres'), findsOneWidget);
-      expect(find.text('Système Leitner'), findsOneWidget);
+      expect(find.text('Import'), findsOneWidget);
+      expect(find.text('Leitner'), findsOneWidget);
     });
 
     testWidgets(

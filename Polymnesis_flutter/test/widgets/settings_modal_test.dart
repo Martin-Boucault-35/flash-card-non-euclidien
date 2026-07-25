@@ -1,19 +1,14 @@
 // Tests widget de [SettingsModal].
 //
-// Couverture :
-//  - Rendu : titres 'Paramètres' et 'Système Leitner', et les 6 champs
-//    d'intervalle pré-remplis (1, 3, 7, 14, 30, 90).
-//  - Toggle de l'aide SQL : taper 'Comment faire ? (Instructions SQL)' affiche
-//    le bloc 'create table cards ...' (puis le lien devient 'Masquer ...').
-//  - Sauvegarde : taper 'Enregistrer' déclenche onSave (url/key trimés, enabled)
-//    et onSaveLeitner (intervals == [1,3,7,14,30,90]).
-//  - Clamp d'intervalle : saisir '0' dans une boîte est ramené à 1 à la sauvegarde
-//    (int.tryParse(...) ?? 1, puis v < 1 ? 1 : v).
+// Le modal est organisé en 3 onglets (Sync / Import / Leitner). TabBarView ne
+// construit que l'onglet actif (+ éventuellement l'adjacent) : pour interagir
+// avec un champ d'un onglet, on l'ouvre d'abord via [openTab]. Le bouton
+// 'Enregistrer' est fixe (hors onglets) et sauvegarde tout (les controllers
+// existent dès initState, quel que soit l'onglet visité).
 //
 // Le modal appelle Navigator.pop(context) à la fin de _handleSave et sur les
 // boutons fermeture/Annuler. On le pousse donc comme route (via un bouton dans
-// un Builder) pour qu'un Navigator avec une route à dépiler existe — sinon le
-// pop dépilerait la route racine. pumpAndSettle est sûr : aucun timer périodique.
+// un Builder) pour qu'un Navigator avec une route à dépiler existe.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -93,8 +88,20 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Ouvre l'onglet dont le libellé est [label] ('Sync' / 'Import' / 'Leitner').
+  Future<void> openTab(WidgetTester tester, String label) async {
+    await tester.tap(find.text(label));
+    await tester.pumpAndSettle();
+  }
+
+  /// Les 6 champs d'intervalle (number, hors champ "réponse rapide").
+  Finder intervalFields() => find.byWidgetPredicate((w) =>
+      w is TextField &&
+      w.keyboardType == TextInputType.number &&
+      w.key != const ValueKey('goldenSecondsField'));
+
   group('SettingsModal - rendu', () {
-    testWidgets('affiche les titres et les 6 intervalles pré-remplis',
+    testWidgets('affiche l\'en-tête, les 3 onglets et les 6 intervalles',
         (tester) async {
       await pumpModal(
         tester,
@@ -106,37 +113,25 @@ void main() {
         leitnerSettings: LeitnerSettings(),
       );
 
-      // Titres présents.
+      // En-tête + les 3 onglets.
       expect(find.text('Paramètres'), findsOneWidget);
+      expect(find.text('Sync'), findsOneWidget);
+      expect(find.text('Import'), findsOneWidget);
+      expect(find.text('Leitner'), findsOneWidget);
+
+      // Onglet Leitner : titre + les 6 intervalles pré-remplis.
+      await openTab(tester, 'Leitner');
       expect(find.text('Système Leitner'), findsOneWidget);
 
-      // Six champs d'intervalle (TextField avec keyboardType number).
-      // On vérifie chaque valeur par défaut pré-remplie via son controller.
-      final textFields = tester
-          .widgetList<TextField>(find.byType(TextField))
-          .toList();
-      // 2 champs sync (URL, Key) + 6 champs d'intervalle + 1 champ "réponse
-      // rapide" + 2 champs import LTDS (jeton, plage) = 11 TextField.
-      expect(textFields.length, 11);
-
-      final intervalValues = textFields
-          .where((tf) =>
-              tf.keyboardType == TextInputType.number &&
-              tf.key != const ValueKey('goldenSecondsField'))
+      final intervalValues = tester
+          .widgetList<TextField>(intervalFields())
           .map((tf) => tf.controller!.text)
           .toList();
       expect(intervalValues, ['1', '3', '7', '14', '30', '90']);
-
-      // Les champs sync reflètent les credentials fournis.
-      final urlField = tester.widget<TextField>(
-        find.widgetWithText(TextField, 'https://x.supabase.co').first,
-      );
-      // URL est dans son controller, pas comme texte enfant : on le lit autrement.
-      // (find.widgetWithText ci-dessus est tolérant si jamais absent.)
-      expect(urlField, isA<TextField>());
     });
 
-    testWidgets('le bloc d\'aide SQL est masqué par défaut', (tester) async {
+    testWidgets('le bloc d\'aide SQL est masqué par défaut (onglet Sync)',
+        (tester) async {
       await pumpModal(
         tester,
         credentials: SyncCredentials(
@@ -147,6 +142,7 @@ void main() {
         leitnerSettings: LeitnerSettings(),
       );
 
+      // L'onglet Sync est actif par défaut.
       expect(find.text('Comment faire ? (Instructions SQL)'), findsOneWidget);
       expect(find.textContaining('create table cards'), findsNothing);
     });
@@ -168,7 +164,6 @@ void main() {
       await tester.tap(find.text('Comment faire ? (Instructions SQL)'));
       await tester.pumpAndSettle();
 
-      // Le bloc SQL est désormais visible et le lien change de libellé.
       expect(find.textContaining('create table cards'), findsOneWidget);
       expect(find.text('Masquer les instructions'), findsOneWidget);
       expect(find.text('Comment faire ? (Instructions SQL)'), findsNothing);
@@ -188,19 +183,15 @@ void main() {
         leitnerSettings: LeitnerSettings(),
       );
 
-      // Le bouton est en bas d'un contenu défilant : le rendre visible avant tap.
-      await tester.ensureVisible(find.text('Enregistrer'));
-      await tester.pumpAndSettle();
+      // Le bouton Enregistrer est fixe (hors onglets) : sauvegarde tout.
       await tester.tap(find.text('Enregistrer'));
       await tester.pumpAndSettle();
 
-      // onSave a reçu des valeurs trimées et enabled conservé.
       expect(savedCreds, isNotNull);
       expect(savedCreds!.url, 'https://x.supabase.co');
       expect(savedCreds!.key, 'abc');
       expect(savedCreds!.enabled, isTrue);
 
-      // onSaveLeitner a reçu les 6 intervalles inchangés.
       expect(savedLeitner, isNotNull);
       expect(savedLeitner!.intervals, [1, 3, 7, 14, 30, 90]);
     });
@@ -217,24 +208,15 @@ void main() {
         leitnerSettings: LeitnerSettings(),
       );
 
-      // Trouver le premier champ d'intervalle (keyboardType number) et y saisir '0'.
-      final numberFields = find.byWidgetPredicate(
-        (w) =>
-            w is TextField &&
-            w.keyboardType == TextInputType.number &&
-            w.key != const ValueKey('goldenSecondsField'),
-      );
-      expect(numberFields, findsNWidgets(6));
+      await openTab(tester, 'Leitner');
+      expect(intervalFields(), findsNWidgets(6));
 
-      await tester.enterText(numberFields.first, '0');
+      await tester.enterText(intervalFields().first, '0');
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Enregistrer'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Enregistrer'));
       await tester.pumpAndSettle();
 
-      // 0 < 1 => clampé à 1 ; les autres intervalles restent inchangés.
       expect(savedLeitner, isNotNull);
       expect(savedLeitner!.intervals, [1, 3, 7, 14, 30, 90]);
     });
@@ -251,19 +233,12 @@ void main() {
         leitnerSettings: LeitnerSettings(),
       );
 
-      final numberFields = find.byWidgetPredicate(
-        (w) =>
-            w is TextField &&
-            w.keyboardType == TextInputType.number &&
-            w.key != const ValueKey('goldenSecondsField'),
-      );
+      await openTab(tester, 'Leitner');
 
       // Vider le 5e champ (valeur 30) : int.tryParse('') == null => 1.
-      await tester.enterText(numberFields.at(4), '');
+      await tester.enterText(intervalFields().at(4), '');
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Enregistrer'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Enregistrer'));
       await tester.pumpAndSettle();
 
@@ -279,12 +254,11 @@ void main() {
         leitnerSettings: LeitnerSettings(),
       );
 
+      await openTab(tester, 'Leitner');
       await tester.enterText(
         find.byKey(const ValueKey('goldenSecondsField')),
         '10',
       );
-      await tester.ensureVisible(find.text('Enregistrer'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Enregistrer'));
       await tester.pumpAndSettle();
 
@@ -303,10 +277,10 @@ void main() {
         ltdsSettings: LtdsSettings(token: 'mon-jeton'),
       );
 
+      await openTab(tester, 'Import');
       expect(find.text('Import "La Table des Savoirs"'), findsOneWidget);
       expect(find.text('Importer les cartes'), findsOneWidget);
 
-      // Le champ jeton contient le jeton fourni.
       final tokenField = tester.widget<TextField>(
         find.byKey(const ValueKey('ltdsTokenField')),
       );
@@ -322,6 +296,7 @@ void main() {
         ltdsSettings: LtdsSettings(token: 'tok'),
       );
 
+      await openTab(tester, 'Import');
       await tester.enterText(
         find.byKey(const ValueKey('ltdsRangeField')),
         '130-132',
@@ -332,12 +307,9 @@ void main() {
       await tester.tap(find.text('Importer les cartes'));
       await tester.pumpAndSettle();
 
-      // onImport reçoit les jours parsés, et le jeton a été sauvegardé.
       expect(importedDays, [130, 131, 132]);
       expect(savedLtds, isNotNull);
       expect(savedLtds!.token, 'tok');
-
-      // Le résumé du résultat s'affiche.
       expect(find.textContaining('2 carte(s) créée(s)'), findsOneWidget);
     });
 
@@ -350,6 +322,7 @@ void main() {
         ltdsSettings: LtdsSettings(token: 'tok'),
       );
 
+      await openTab(tester, 'Import');
       await tester.enterText(
         find.byKey(const ValueKey('ltdsRangeField')),
         'abc',
@@ -372,6 +345,7 @@ void main() {
         ltdsSettings: LtdsSettings(), // jeton vide
       );
 
+      await openTab(tester, 'Import');
       await tester.enterText(
         find.byKey(const ValueKey('ltdsRangeField')),
         '152',
