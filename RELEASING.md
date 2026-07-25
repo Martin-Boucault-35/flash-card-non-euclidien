@@ -16,6 +16,20 @@ Mémo du fonctionnement CI/CD. L'app Flutter est dans `Polymnesis_flutter/`.
 
 > Si tu oublies de bumper la version, le tag existe déjà → aucune release (normal).
 
+### Check automatique de cohérence (`version-check.yml`)
+
+Sur chaque PR, un check vérifie que le bump du pubspec correspond au **label** :
+
+| Label de la PR | Bump attendu |
+|---|---|
+| `type: fix` | PATCH (1.2.3 → 1.2.4) |
+| `type: feature` | MINOR (1.2.3 → 1.3.0) |
+| `breaking-change` | MAJOR (1.2.3 → 2.0.0) |
+| `type: tech` | libre (bump ou pas — couvre l'infra ET les PR de release) |
+
+Exactement **1** label `type:` est requis. Une feature/fix sans bump cohérent =
+check rouge. (À rendre requis dans la protection de branche, comme `test`.)
+
 ## SemVer et le numéro de build (`+N`)
 
 `version: 1.2.0+5` :
