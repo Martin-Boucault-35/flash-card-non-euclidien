@@ -20,6 +20,10 @@ permissions:
 
 jobs:
   version-check:
+    # Le bump de version ne compte que pour une release (merge vers main).
+    # On n'exige donc ce check que sur les PR ciblant main — pas sur les
+    # sous-PR d'une branche épique (base ≠ main).
+    if: github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     env:
       # Tableau JSON des noms de labels, ex: ["type: feature","scope: ui"]
