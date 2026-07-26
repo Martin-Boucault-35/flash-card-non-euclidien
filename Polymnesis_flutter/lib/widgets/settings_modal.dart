@@ -85,6 +85,7 @@ class _SettingsModalState extends State<SettingsModal>
   bool get _importing => _importingLast || _importingRange;
   String? _importMessage;
   bool _importIsError = false;
+  List<ImportedQuestion> _importedQuestions = const [];
 
   @override
   void initState() {
@@ -723,35 +724,70 @@ class _SettingsModalState extends State<SettingsModal>
 
         if (_importMessage != null) ...[
           const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: (_importIsError ? AppColors.red500 : AppColors.emerald400)
-                  .withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: (_importIsError ? AppColors.red500 : AppColors.emerald400)
-                    .withValues(alpha: 0.4),
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  _importIsError ? Icons.error_outline : Icons.check_circle_outline,
-                  size: 18,
-                  color: _importIsError ? AppColors.red500 : AppColors.emerald400,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _importMessage!,
-                    style: const TextStyle(fontSize: 13, color: AppColors.slate200),
+          Builder(builder: (context) {
+            final hasList = _importedQuestions.isNotEmpty;
+            final color =
+                _importIsError ? AppColors.red500 : AppColors.emerald400;
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: hasList ? _showImportedDialog : null,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: color.withValues(alpha: 0.4)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            _importIsError
+                                ? Icons.error_outline
+                                : Icons.check_circle_outline,
+                            size: 18,
+                            color: color,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _importMessage!,
+                              style: const TextStyle(
+                                  fontSize: 13, color: AppColors.slate200),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (hasList) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.list_alt,
+                                size: 14, color: AppColors.indigo400),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Voir le détail (${_importedQuestions.length} question(s))',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.indigo400,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          }),
         ],
       ],
     );
@@ -759,6 +795,7 @@ class _SettingsModalState extends State<SettingsModal>
 
   /// Import du dernier jour : sauve le jeton puis délègue à onImportLastDay.
   Future<void> _handleImportLastDay() async {
+    _importedQuestions = const [];
     final token = _tokenController.text.trim();
     if (token.isEmpty) {
       setState(() {
@@ -781,6 +818,7 @@ class _SettingsModalState extends State<SettingsModal>
       setState(() {
         _importIsError = result.questionsFound == 0;
         _importMessage = result.summary;
+        _importedQuestions = result.imported;
       });
     } on LtdsAuthException catch (e) {
       if (!mounted) return;
@@ -800,6 +838,7 @@ class _SettingsModalState extends State<SettingsModal>
   }
 
   Future<void> _handleImport() async {
+    _importedQuestions = const [];
     final token = _tokenController.text.trim();
     if (token.isEmpty) {
       setState(() {
@@ -834,6 +873,7 @@ class _SettingsModalState extends State<SettingsModal>
       setState(() {
         _importIsError = result.questionsFound == 0;
         _importMessage = result.summary;
+        _importedQuestions = result.imported;
       });
     } on LtdsAuthException catch (e) {
       if (!mounted) return;
@@ -850,6 +890,114 @@ class _SettingsModalState extends State<SettingsModal>
     } finally {
       if (mounted) setState(() => _importingRange = false);
     }
+  }
+
+  /// Popup listant les questions réellement importées (réponse + énoncé).
+  void _showImportedDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.slate900,
+        // Marges réduites -> dialog plus large (légende sur 1 ligne).
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+        title: Text(
+          'Détail de l\'import (${_importedQuestions.length})',
+          style: const TextStyle(color: Colors.white, fontSize: 18),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Légende des couleurs
+              Wrap(
+                spacing: 10,
+                runSpacing: 4,
+                children: [
+                  _legendItem(AppColors.emerald400, 'nouvelle carte'),
+                  _legendItem(AppColors.amber200, 'indice ajouté'),
+                  _legendItem(AppColors.red400, 'déjà présente'),
+                ],
+              ),
+              const SizedBox(height: 10),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.62,
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _importedQuestions.length,
+                  separatorBuilder: (_, _) =>
+                      const Divider(color: AppColors.slate800, height: 16),
+                  itemBuilder: (context, i) {
+                    final q = _importedQuestions[i];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          q.answer,
+                          style: TextStyle(
+                            color: _kindColor(q.kind), // couleur selon la nature
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          q.question,
+                          style: const TextStyle(
+                              color: AppColors.slate300, fontSize: 13),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Fermer',
+                style: TextStyle(color: AppColors.indigo400)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Couleur de la réponse selon la nature de l'import.
+  Color _kindColor(ImportKind kind) {
+    switch (kind) {
+      case ImportKind.created:
+        return AppColors.emerald400;
+      case ImportKind.triggerAdded:
+        return AppColors.amber200;
+      case ImportKind.alreadyPresent:
+        return AppColors.red400;
+    }
+  }
+
+  /// Petit item de légende : une pastille de couleur + un libellé.
+  Widget _legendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(label,
+            style: const TextStyle(fontSize: 12, color: AppColors.slate400)),
+      ],
+    );
   }
 
   void _handleSave() {

@@ -242,6 +242,36 @@ void main() {
     });
   });
 
+  group('importFromLtds - détail des questions importées (#18)', () {
+    test('classe chaque question : créée / indice ajouté / déjà présente',
+        () async {
+      seedPrefs(cards: [
+        buildCard(id: 'd', answer: 'Dracula', triggers: const ['Roman 1897']),
+      ]);
+      final provider = await makeInitializedProvider();
+      await provider.updateLtdsSettings(LtdsSettings(token: 'tok'));
+
+      final client = clientFor({
+        '/game/facile/152': dayWith([
+          // Dracula existe, énoncé nouveau -> indice ajouté.
+          q(1, 'Inventeur de Dracula ?', 'Classique', 'Dracula'),
+          // Nouvelle réponse -> carte créée.
+          q(2, 'Chanteur de Papaoutai ?', 'Musiques', 'Stromae'),
+          // Dracula + énoncé déjà présent (seed) -> déjà présente.
+          q(3, 'Roman 1897', 'Classique', 'Dracula'),
+        ]),
+      });
+
+      final result = await provider.importFromLtds(days: [152], client: client);
+
+      expect(result.imported.length, 3);
+      final byQuestion = {for (final e in result.imported) e.question: e};
+      expect(byQuestion['Inventeur de Dracula ?']!.kind, ImportKind.triggerAdded);
+      expect(byQuestion['Chanteur de Papaoutai ?']!.kind, ImportKind.created);
+      expect(byQuestion['Roman 1897']!.kind, ImportKind.alreadyPresent);
+    });
+  });
+
   group('importFromLtds - erreurs', () {
     test('jeton vide -> LtdsAuthException', () async {
       seedPrefs(cards: []);

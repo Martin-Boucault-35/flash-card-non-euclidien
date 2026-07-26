@@ -42,6 +42,16 @@ void main() {
       questionsFound: 3,
       daysRequested: 1,
       daysWithData: const [152],
+      imported: const [
+        ImportedQuestion(
+            answer: 'Dracula',
+            question: 'Qui a inventé Dracula ?',
+            kind: ImportKind.created),
+        ImportedQuestion(
+            answer: 'Stromae',
+            question: 'Chanteur de Papaoutai ?',
+            kind: ImportKind.alreadyPresent),
+      ],
     );
   });
 
@@ -382,6 +392,33 @@ void main() {
 
       expect(importedDays, isNull);
       expect(find.textContaining('Renseigne ton jeton'), findsOneWidget);
+    });
+
+    testWidgets('résultat cliquable → popup des questions importées (#18)',
+        (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(),
+        leitnerSettings: LeitnerSettings(),
+        ltdsSettings: LtdsSettings(token: 'tok'),
+      );
+
+      await openTab(tester, 'Import');
+      await tester.ensureVisible(find.text('Importer le dernier jour'));
+      await tester.tap(find.text('Importer le dernier jour'));
+      await tester.pumpAndSettle();
+
+      // Un lien "Voir le détail (N question(s))" apparaît sous le résultat.
+      final link = find.textContaining('Voir le détail');
+      await tester.ensureVisible(link);
+      expect(link, findsOneWidget);
+      await tester.tap(link);
+      await tester.pumpAndSettle();
+
+      // La popup liste les questions (réponse + énoncé).
+      expect(find.text('Détail de l\'import (2)'), findsOneWidget);
+      expect(find.text('Qui a inventé Dracula ?'), findsOneWidget);
+      expect(find.text('Chanteur de Papaoutai ?'), findsOneWidget);
     });
   });
 }
