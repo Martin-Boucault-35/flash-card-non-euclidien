@@ -5,6 +5,27 @@ import '../models/models.dart';
 import '../services/services.dart';
 import '../constants.dart';
 
+/// Une question réellement importée (carte créée ou indice ajouté), pour
+/// pouvoir afficher le détail des questions importées à l'utilisateur.
+/// Nature d'une question rencontrée pendant l'import.
+enum ImportKind {
+  created, // nouvelle carte créée
+  triggerAdded, // indice ajouté à une carte existante
+  alreadyPresent, // question déjà présente (rien de nouveau)
+}
+
+class ImportedQuestion {
+  final String answer;
+  final String question;
+  final ImportKind kind;
+
+  const ImportedQuestion({
+    required this.answer,
+    required this.question,
+    required this.kind,
+  });
+}
+
 /// Résultat d'un import depuis "La Table des Savoirs".
 class LtdsImportResult {
   final int cardsCreated;
@@ -16,6 +37,9 @@ class LtdsImportResult {
   final List<int> daysWithoutData; // jours demandés mais sans historique (404)
   final List<String> errors;
 
+  /// Détail des questions importées (carte créée ou indice ajouté).
+  final List<ImportedQuestion> imported;
+
   LtdsImportResult({
     this.cardsCreated = 0,
     this.triggersAdded = 0,
@@ -25,6 +49,7 @@ class LtdsImportResult {
     this.daysWithData = const [],
     this.daysWithoutData = const [],
     this.errors = const [],
+    this.imported = const [],
   });
 
   /// Message à afficher à l'utilisateur, le plus précis possible.
@@ -371,6 +396,7 @@ class CardProvider extends ChangeNotifier {
     var questionsFound = 0;
     final daysWithData = <int>{};
     final errors = <String>[];
+    final imported = <ImportedQuestion>[]; // questions réellement importées
     final changed = <String, FlashCard>{}; // id -> dernière version à syncer
 
     for (final day in days) {
@@ -411,12 +437,25 @@ class CardProvider extends ChangeNotifier {
             _cards.insert(0, card);
             changed[card.id] = card;
             cardsCreated++;
+            imported.add(ImportedQuestion(
+                answer: q.answer,
+                question: q.question,
+                kind: ImportKind.created));
           } else {
             final existing = _cards[idx];
             final normQuestion = q.question.toLowerCase().trim();
             final hasTrigger = existing.triggers.any(
               (t) => t.toLowerCase().trim() == normQuestion,
             );
+
+            // Question déjà connue -> "déjà présente" ; sinon "indice ajouté".
+            imported.add(ImportedQuestion(
+              answer: q.answer,
+              question: q.question,
+              kind: hasTrigger
+                  ? ImportKind.alreadyPresent
+                  : ImportKind.triggerAdded,
+            ));
 
             // Fusionne les nouvelles réponses acceptées (dédup insensible à la casse).
             final existingAccepted =
@@ -469,6 +508,7 @@ class CardProvider extends ChangeNotifier {
       daysWithData: daysWithData.toList()..sort(),
       daysWithoutData: withoutData,
       errors: errors,
+      imported: imported,
     );
   }
 
