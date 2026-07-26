@@ -71,6 +71,28 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  group('CollectionScreen - pill jours restants (#17)', () {
+    testWidgets('due -> "À réviser", future -> "Dans N j", maîtrisée -> pas de pill',
+        (tester) async {
+      seedPrefs(cards: [
+        buildCard(id: 'due', answer: 'Due', nextReviewAt: daysFromNowMillis(-1)),
+        buildCard(id: 'fut', answer: 'Future', nextReviewAt: daysFromNowMillis(5)),
+        buildCard(
+          id: 'mst',
+          answer: 'Master',
+          leitnerBox: 7, // > boxCount (6) => maîtrisée
+          nextReviewAt: daysFromNowMillis(3650),
+        ),
+      ]);
+      await pumpCollection(tester, onEdit: (_) {});
+
+      expect(find.text('À réviser'), findsOneWidget); // carte due
+      expect(find.textContaining('Dans '), findsOneWidget); // carte future
+      // La maîtrisée n'a pas de pill de révision (mais sa boîte dit "Maîtrisé").
+      expect(find.text('Maîtrisé'), findsOneWidget);
+    });
+  });
+
   group('CollectionScreen - rendu', () {
     testWidgets("affiche l'en-tête 'Mon Pokédex' et toutes les réponses",
         (tester) async {
