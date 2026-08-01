@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import '../models/card_model.dart';
 import '../providers/card_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/card_badges.dart';
 import '../widgets/theme_badge.dart';
+import 'card_detail_screen.dart';
 
 /// Écran de collection (Pokédex)
 class CollectionScreen extends StatefulWidget {
@@ -204,6 +206,14 @@ class _CollectionScreenState extends State<CollectionScreen> {
           card: card,
           onEdit: () => widget.onEdit(card),
           onDelete: () => _confirmDelete(context, provider, card.id),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => CardDetailScreen(
+                cardId: card.id,
+                onEdit: widget.onEdit,
+              ),
+            ),
+          ),
         );
       },
     );
@@ -242,23 +252,33 @@ class _CardItem extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
+  /// Ouvre la page de détail (les icônes édition/suppression restent prioritaires).
+  final VoidCallback onTap;
+
   const _CardItem({
     required this.card,
     required this.onEdit,
     required this.onDelete,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.slate800,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.slate700),
       ),
-      child: Column(
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -270,8 +290,8 @@ class _CardItem extends StatelessWidget {
                   runSpacing: 4,
                   children: [
                     ThemeBadge(theme: card.theme),
-                    _LeitnerBoxBadge(box: card.leitnerBox),
-                    _NextReviewBadge(card: card),
+                    LeitnerBoxBadge(box: card.leitnerBox),
+                    NextReviewBadge(card: card),
                   ],
                 ),
               ),
@@ -326,109 +346,10 @@ class _CardItem extends StatelessWidget {
               ],
             ),
           )),
-        ],
-      ),
-    );
-  }
-}
-
-/// Pill indiquant dans combien de jours la carte revient dans le jeu quotidien.
-/// Calculé sur la date PROPRE de la carte ([FlashCard.nextReviewAt]) — deux
-/// cartes de la même boîte peuvent revenir des jours différents.
-class _NextReviewBadge extends StatelessWidget {
-  final FlashCard card;
-
-  const _NextReviewBadge({required this.card});
-
-  @override
-  Widget build(BuildContext context) {
-    final maxBox = context.read<CardProvider>().leitnerSettings.boxCount;
-    // Carte maîtrisée : pas de compte à rebours (la boîte affiche déjà "Maîtrisé").
-    if (card.leitnerBox > maxBox) return const SizedBox.shrink();
-
-    final diff = card.nextReviewAt - DateTime.now().millisecondsSinceEpoch;
-    final due = diff <= 0;
-    final days = due
-        ? 0
-        : (diff / const Duration(days: 1).inMilliseconds).ceil();
-    final label = due ? 'À réviser' : 'Dans $days j';
-
-    final Color fg = due ? AppColors.indigo400 : AppColors.slate400;
-    final Color border = due ? AppColors.indigo500 : AppColors.slate600;
-    final Color bg = (due ? AppColors.indigo600 : AppColors.slate700)
-        .withValues(alpha: due ? 0.2 : 0.4);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: border, width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            due ? Icons.notifications_active : Icons.schedule,
-            size: 12,
-            color: fg,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: fg,
+              ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LeitnerBoxBadge extends StatelessWidget {
-  final int box;
-
-  const _LeitnerBoxBadge({required this.box});
-
-  @override
-  Widget build(BuildContext context) {
-    final provider = context.read<CardProvider>();
-    final maxBox = provider.leitnerSettings.boxCount;
-    final isMastered = box > maxBox;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: isMastered
-            ? AppColors.emerald900.withValues(alpha: 0.5)
-            : AppColors.amber900.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isMastered ? AppColors.emerald700 : AppColors.amber700,
-          width: 0.5,
         ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isMastered ? Icons.check_circle : Icons.inbox,
-            size: 12,
-            color: isMastered ? AppColors.emerald400 : AppColors.amber200,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            isMastered ? 'Maîtrisé' : 'Boîte $box',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: isMastered ? AppColors.emerald400 : AppColors.amber200,
-            ),
-          ),
-        ],
       ),
     );
   }
