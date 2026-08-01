@@ -1,0 +1,50 @@
+name: Archive LTDS
+
+# Archive les quiz "La Table des Savoirs" dans la table Supabase `ltds_questions`
+# (séparée de `cards` : c'est un backup, ça n'alimente pas le Leitner de l'app).
+#
+# - Automatique : 1×/jour, AUTO-RÉPARATEUR — récupère tous les jours MANQUANTS
+#   parmi les 30 derniers (un jour joué en retard est rattrapé au run suivant).
+# - Manuel : onglet Actions → "Run workflow" → champ "days" pour un backfill
+#   (ex. "1-180"). Laisser vide = rattrapage automatique sur la fenêtre.
+#
+# Secrets requis (Settings → Secrets and variables → Actions) :
+#   LTDS_TOKEN         jeton Bearer LTDS (~1 mois ; le job prévient avant expiration)
+#   SUPABASE_URL       déjà présent (utilisé aussi par keepalive)
+#   SUPABASE_ANON_KEY  déjà présent — la table a une policy qui l'autorise
+
+on:
+  schedule:
+    - cron: '23 15 * * *' # tous les jours ~11h23 UTC (après la sortie du quiz)
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Plage à archiver (ex. 1-180). Vide = rattrapage auto des jours manquants.'
+        required: false
+        default: ''
+      window:
+        description: 'Taille de la fenêtre de rattrapage en jours (défaut 30).'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Archiver dans Supabase
+        env:
+          LTDS_TOKEN: ${{ secrets.LTDS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          DAYS: ${{ inputs.days }}
+          WINDOW: ${{ inputs.window }}
+        run: python .github/scripts/ltds_archive.py
