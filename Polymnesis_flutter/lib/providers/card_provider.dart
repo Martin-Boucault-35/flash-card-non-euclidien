@@ -211,12 +211,16 @@ class CardProvider extends ChangeNotifier {
     required String answer,
     required List<String> triggers,
   }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
     final card = FlashCard(
       id: const Uuid().v4(),
       theme: theme,
       answer: answer.trim(),
       triggers: triggers.where((t) => t.trim().isNotEmpty).toList(),
-      createdAt: DateTime.now().millisecondsSinceEpoch,
+      createdAt: now,
+      history: [
+        CardEvent(type: CardEventType.created, fromBox: 1, toBox: 1, at: now),
+      ],
     );
 
     await saveCard(card);
@@ -321,28 +325,56 @@ class CardProvider extends ChangeNotifier {
   /// Nombre de cartes à réviser aujourd'hui
   int get dailyCardCount => getDailyCards().length;
 
+  /// Version À JOUR de [card] depuis l'état du provider. Le daily game peut
+  /// repasser une carte déjà mutée dans la même session (ré-insertion après
+  /// échec) avec un snapshot périmé : muter ce snapshot écraserait la boîte ET
+  /// l'historique déjà enregistrés. On repart donc toujours de la carte vivante.
+  FlashCard _liveCard(FlashCard card) =>
+      _cards.firstWhere((c) => c.id == card.id, orElse: () => card);
+
   /// Met à jour une carte après une bonne réponse
   /// [easy] = true si répondu en <10s → +2 boîtes, sinon +1
   Future<void> leitnerCorrect(FlashCard card, {bool easy = false}) async {
+    final live = _liveCard(card);
     final step = easy ? 2 : 1;
-    final newBox = (card.leitnerBox + step).clamp(1, _leitnerSettings.boxCount + 1);
+    final newBox = (live.leitnerBox + step).clamp(1, _leitnerSettings.boxCount + 1);
     final nextReview = newBox > _leitnerSettings.boxCount
         ? DateTime.now().add(const Duration(days: 365 * 10)).millisecondsSinceEpoch
         : _leitnerSettings.computeNextReview(newBox);
 
-    final updated = card.copyWith(
+    final updated = live.copyWith(
       leitnerBox: newBox,
       nextReviewAt: nextReview,
+      history: [
+        ...live.history,
+        CardEvent(
+          type: easy ? CardEventType.correctFast : CardEventType.correct,
+          fromBox: live.leitnerBox,
+          toBox: newBox,
+          at: DateTime.now().millisecondsSinceEpoch,
+        ),
+      ],
     );
     await saveCard(updated);
   }
 
-  /// Met à jour une carte après une mauvaise réponse (recule d'une boîte)
-  Future<void> leitnerIncorrect(FlashCard card) async {
-    final newBox = (card.leitnerBox - 1).clamp(1, _leitnerSettings.boxCount);
-    final updated = card.copyWith(
+  /// Met à jour une carte après une mauvaise réponse (recule d'une boîte).
+  /// [skipped] = true si la question a été passée (plutôt que mal répondue).
+  Future<void> leitnerIncorrect(FlashCard card, {bool skipped = false}) async {
+    final live = _liveCard(card);
+    final newBox = (live.leitnerBox - 1).clamp(1, _leitnerSettings.boxCount);
+    final updated = live.copyWith(
       leitnerBox: newBox,
       nextReviewAt: _leitnerSettings.computeNextReview(newBox),
+      history: [
+        ...live.history,
+        CardEvent(
+          type: skipped ? CardEventType.skipped : CardEventType.wrong,
+          fromBox: live.leitnerBox,
+          toBox: newBox,
+          at: DateTime.now().millisecondsSinceEpoch,
+        ),
+      ],
     );
     await saveCard(updated);
   }
@@ -426,13 +458,18 @@ class CardProvider extends ChangeNotifier {
           );
 
           if (idx == -1) {
+            final now = DateTime.now().millisecondsSinceEpoch;
             final card = FlashCard(
               id: const Uuid().v4(),
               theme: q.theme,
               answer: q.answer,
               triggers: [q.question],
-              createdAt: DateTime.now().millisecondsSinceEpoch,
+              createdAt: now,
               acceptedAnswers: q.validAnswers,
+              history: [
+                CardEvent(
+                    type: CardEventType.imported, fromBox: 1, toBox: 1, at: now),
+              ],
             );
             _cards.insert(0, card);
             changed[card.id] = card;

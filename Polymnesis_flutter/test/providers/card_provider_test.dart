@@ -346,6 +346,90 @@ void main() {
     });
   });
 
+  group('CardProvider - historique des cartes (#26)', () {
+    test('leitnerCorrect ajoute un événement correct (+1) avec from/to', () async {
+      seedPrefs(cards: [buildCard(id: 'a', leitnerBox: 2)]);
+      final provider = await makeInitializedProvider();
+
+      await provider.leitnerCorrect(provider.cards.single);
+
+      final history = provider.cards.single.history;
+      expect(history.length, 1);
+      expect(history.single.type, CardEventType.correct);
+      expect(history.single.fromBox, 2);
+      expect(history.single.toBox, 3);
+      expect(history.single.at, greaterThan(0));
+    });
+
+    test('leitnerCorrect easy ajoute correctFast (+2)', () async {
+      seedPrefs(cards: [buildCard(id: 'a', leitnerBox: 2)]);
+      final provider = await makeInitializedProvider();
+
+      await provider.leitnerCorrect(provider.cards.single, easy: true);
+
+      final e = provider.cards.single.history.single;
+      expect(e.type, CardEventType.correctFast);
+      expect(e.fromBox, 2);
+      expect(e.toBox, 4);
+    });
+
+    test('leitnerIncorrect ajoute wrong ; skipped: true ajoute skipped', () async {
+      seedPrefs(cards: [
+        buildCard(id: 'a', leitnerBox: 4),
+        buildCard(id: 'b', answer: 'Autre', leitnerBox: 4),
+      ]);
+      final provider = await makeInitializedProvider();
+
+      await provider.leitnerIncorrect(
+          provider.cards.firstWhere((c) => c.id == 'a'));
+      await provider.leitnerIncorrect(
+          provider.cards.firstWhere((c) => c.id == 'b'),
+          skipped: true);
+
+      expect(provider.cards.firstWhere((c) => c.id == 'a').history.single.type,
+          CardEventType.wrong);
+      expect(provider.cards.firstWhere((c) => c.id == 'b').history.single.type,
+          CardEventType.skipped);
+    });
+
+    test('addCard ajoute un événement created', () async {
+      seedPrefs(cards: [buildCard(id: 'seed')]);
+      final provider = await makeInitializedProvider();
+
+      await provider.addCard(
+        theme: FlashCardTheme.sport,
+        answer: 'Zidane',
+        triggers: const ['numéro 10'],
+      );
+
+      final card = provider.cards.firstWhere((c) => c.answer == 'Zidane');
+      expect(card.history.single.type, CardEventType.created);
+      expect(card.history.single.at, card.createdAt);
+    });
+
+    test('snapshot périmé : les événements de la même session survivent',
+        () async {
+      // Simule le daily game : la carte échoue puis est rejouée depuis un
+      // SNAPSHOT pris avant l'échec (ré-insertion dans la queue).
+      seedPrefs(cards: [buildCard(id: 'a', leitnerBox: 3)]);
+      final provider = await makeInitializedProvider();
+
+      final staleSnapshot = provider.cards.single; // box 3, history vide
+      await provider.leitnerIncorrect(staleSnapshot); // box 3 -> 2, event wrong
+
+      // Rejouée depuis le snapshot périmé (box 3, sans l'événement wrong).
+      await provider.leitnerCorrect(staleSnapshot); // doit repartir du LIVE
+
+      final card = provider.cards.single;
+      // Les DEUX événements sont là (le wrong n'a pas été écrasé)...
+      expect(card.history.map((e) => e.type).toList(),
+          [CardEventType.wrong, CardEventType.correct]);
+      // ...et la boîte repart de l'état à jour : 3 -> 2 (wrong), puis 2 -> 3.
+      expect(card.history.last.fromBox, 2);
+      expect(card.leitnerBox, 3);
+    });
+  });
+
   group('CardProvider - Leitner réponses', () {
     test('leitnerCorrect normal => boîte +1', () async {
       seedPrefs(cards: [buildCard(id: 'a', leitnerBox: 2)]);

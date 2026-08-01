@@ -1,3 +1,5 @@
+import 'card_event.dart';
+
 /// Enum représentant les thèmes disponibles pour les cartes
 enum FlashCardTheme {
   classique('Classique'),
@@ -39,6 +41,10 @@ class FlashCard {
   /// réconciliation de synchronisation (la version la plus récente gagne).
   final int updatedAt;
 
+  /// Historique complet de la carte (création/import, montées/descentes de
+  /// boîte au jeu quotidien), du plus ancien au plus récent. Pas de plafond.
+  final List<CardEvent> history;
+
   FlashCard({
     required this.id,
     required this.theme,
@@ -49,6 +55,7 @@ class FlashCard {
     int? nextReviewAt,
     this.acceptedAnswers = const [],
     int? updatedAt,
+    this.history = const [],
   })  : nextReviewAt = nextReviewAt ?? createdAt,
         updatedAt = updatedAt ?? createdAt;
 
@@ -63,6 +70,7 @@ class FlashCard {
     int? nextReviewAt,
     List<String>? acceptedAnswers,
     int? updatedAt,
+    List<CardEvent>? history,
   }) {
     return FlashCard(
       id: id ?? this.id,
@@ -74,6 +82,7 @@ class FlashCard {
       nextReviewAt: nextReviewAt ?? this.nextReviewAt,
       acceptedAnswers: acceptedAnswers ?? List.from(this.acceptedAnswers),
       updatedAt: updatedAt ?? this.updatedAt,
+      history: history ?? List.from(this.history),
     );
   }
 
@@ -93,6 +102,10 @@ class FlashCard {
       acceptedAnswers:
           List<String>.from(data['acceptedAnswers'] as List? ?? const []),
       updatedAt: data['updatedAt'] as int? ?? createdAt,
+      history: (data['history'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(CardEvent.fromJson)
+          .toList(),
     );
   }
 
@@ -108,6 +121,7 @@ class FlashCard {
       'nextReviewAt': nextReviewAt,
       'acceptedAnswers': acceptedAnswers,
       'updatedAt': updatedAt,
+      'history': history.map((e) => e.toJson()).toList(),
     };
   }
 

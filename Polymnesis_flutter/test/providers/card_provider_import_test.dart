@@ -93,6 +93,9 @@ void main() {
       final dracula = provider.cards.firstWhere((c) => c.answer == 'Dracula');
       expect(dracula.theme, FlashCardTheme.classique);
       expect(dracula.triggers, ['Inventeur de Dracula ?']);
+      // Une carte créée par l'import démarre son historique par `imported` (#26).
+      expect(dracula.history.single.type, CardEventType.imported);
+      expect(dracula.history.single.at, dracula.createdAt);
     });
   });
 
