@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import '../models/card_event.dart';
 import '../models/card_model.dart';
 
 /// Résultat d'une réconciliation local ⇄ Supabase.
@@ -32,6 +33,19 @@ List<String> _unionCaseInsensitive(Iterable<String> items) {
   return out;
 }
 
+/// Union dédupliquée des historiques (clé at|type|toBox), triée par date.
+/// Jamais « freshest wins » : on perdrait la vie de la carte vue par l'un
+/// des deux appareils.
+List<CardEvent> _unionHistory(Iterable<CardEvent> events) {
+  final seen = <String>{};
+  final out = <CardEvent>[];
+  for (final e in events) {
+    if (seen.add(e.dedupKey)) out.add(e);
+  }
+  out.sort((a, b) => a.at.compareTo(b.at));
+  return out;
+}
+
 /// Fusionne un groupe de cartes partageant la même réponse en UNE carte.
 FlashCard _mergeGroup(List<FlashCard> group) {
   if (group.length == 1) return group.first;
@@ -52,6 +66,7 @@ FlashCard _mergeGroup(List<FlashCard> group) {
     nextReviewAt: freshest.nextReviewAt,
     createdAt: group.map((c) => c.createdAt).reduce(min),
     updatedAt: group.map((c) => c.updatedAt).reduce(max),
+    history: _unionHistory(group.expand((c) => c.history)),
   );
 }
 
@@ -95,7 +110,8 @@ SyncResult reconcileCards({
         r.leitnerBox != m.leitnerBox ||
         r.nextReviewAt != m.nextReviewAt ||
         r.triggers.length != m.triggers.length ||
-        r.acceptedAnswers.length != m.acceptedAnswers.length;
+        r.acceptedAnswers.length != m.acceptedAnswers.length ||
+        r.history.length != m.history.length;
   }).toList();
 
   final remoteOrphanIds = remote

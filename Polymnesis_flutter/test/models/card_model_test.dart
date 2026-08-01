@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:polymnesis/models/card_event.dart';
 import 'package:polymnesis/models/card_model.dart';
 
 void main() {
@@ -306,6 +307,60 @@ void main() {
     test('copyWith', () {
       expect(card(updatedAt: 1).copyWith(updatedAt: 2).updatedAt, 2);
       expect(card(updatedAt: 1).copyWith().updatedAt, 1);
+    });
+  });
+
+  group('CardEvent & FlashCard.history (#26)', () {
+    const event = CardEvent(
+      type: CardEventType.correctFast,
+      fromBox: 3,
+      toBox: 5,
+      at: 1234,
+    );
+
+    FlashCard card({List<CardEvent> history = const []}) => FlashCard(
+          id: '1',
+          theme: FlashCardTheme.sport,
+          answer: 'A',
+          triggers: const ['t'],
+          createdAt: 1,
+          history: history,
+        );
+
+    test('CardEvent round-trip JSON', () {
+      final round = CardEvent.fromJson(event.toJson());
+      expect(round.type, CardEventType.correctFast);
+      expect(round.fromBox, 3);
+      expect(round.toBox, 5);
+      expect(round.at, 1234);
+    });
+
+    test('CardEventType.fromString tolère une valeur inconnue', () {
+      expect(CardEventType.fromString('nimporte'), CardEventType.correct);
+      expect(CardEventType.fromString('skipped'), CardEventType.skipped);
+    });
+
+    test('history vide par défaut (rétro-compat anciennes cartes)', () {
+      expect(card().history, isEmpty);
+      expect(FlashCard.fromJson({'id': 'x', 'answer': 'a'}).history, isEmpty);
+    });
+
+    test('round-trip JSON de la carte préserve l\'historique', () {
+      final c = card(history: const [event]);
+      final round = FlashCard.fromJson(c.toJson());
+      expect(round.history.length, 1);
+      expect(round.history.single.type, CardEventType.correctFast);
+      expect(round.history.single.at, 1234);
+    });
+
+    test('copyWith préserve et remplace l\'historique', () {
+      final c = card(history: const [event]);
+      expect(c.copyWith(answer: 'B').history.length, 1);
+      expect(c.copyWith(history: const []).history, isEmpty);
+    });
+
+    test('dedupKey identifie un événement', () {
+      expect(event.dedupKey, '1234|correctFast|5');
     });
   });
 }
