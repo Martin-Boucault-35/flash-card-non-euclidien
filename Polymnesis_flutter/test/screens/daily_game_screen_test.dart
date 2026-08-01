@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:polymnesis/models/card_event.dart';
 import 'package:polymnesis/screens/daily_game_screen.dart';
 import 'package:polymnesis/widgets/app_button.dart';
 
@@ -247,11 +248,10 @@ void main() {
         // Reprise : réponse correcte. La carte ayant été ratée aujourd'hui, le
         // bonus rapide est désactivé -> chemin "correctHard" (+1).
         //
-        // QUIRK observé : la carte ré-insérée dans la file conserve sa boîte
-        // d'AVANT l'échec (3), car leitnerIncorrect sauvegarde une copie côté
-        // provider sans muter l'objet présent dans la file. Le +1 de la reprise
-        // se calcule donc à partir de 3 (objet de la file) et non de 2 (provider)
-        // => la boîte finale persistée est 4, pas 3.
+        // La carte ré-insérée dans la file porte un snapshot PÉRIMÉ (boîte 3,
+        // d'avant l'échec). Depuis #26, le provider repart systématiquement de
+        // la carte à jour (_liveCard) : le +1 se calcule donc sur 2 (état réel)
+        // et non sur 3. Rater puis réussir ramène bien au point de départ.
         await tester.enterText(find.byType(TextField), 'Paris');
         await tester.pump();
         await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -260,9 +260,13 @@ void main() {
         await tester.pump(const Duration(milliseconds: 1600));
         await tester.pumpAndSettle();
 
-        // Fin de session + boîte persistée à 4 (cf. quirk ci-dessus).
+        // Fin de session + boîte persistée à 3 (3 -> 2 à l'échec, 2 -> 3 ensuite).
         expect(find.text('Révision Terminée !'), findsOneWidget);
-        expect(provider.cards.firstWhere((c) => c.id == 'solo').leitnerBox, 4);
+        final replayed = provider.cards.firstWhere((c) => c.id == 'solo');
+        expect(replayed.leitnerBox, 3);
+        // Les deux événements de la session sont conservés (#26).
+        expect(replayed.history.map((e) => e.type).toList(),
+            [CardEventType.wrong, CardEventType.correct]);
       },
     );
   });

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:polymnesis/models/card_event.dart';
 import 'package:polymnesis/models/card_model.dart';
 import 'package:polymnesis/services/sync_reconciler.dart';
 
@@ -14,6 +15,7 @@ void main() {
     int createdAt = 100,
     int? updatedAt,
     FlashCardTheme theme = FlashCardTheme.cultureG,
+    List<CardEvent> history = const [],
   }) =>
       FlashCard(
         id: id,
@@ -24,7 +26,11 @@ void main() {
         leitnerBox: leitnerBox,
         createdAt: createdAt,
         updatedAt: updatedAt ?? createdAt,
+        history: history,
       );
+
+  CardEvent event(int at, {CardEventType type = CardEventType.correct, int to = 2}) =>
+      CardEvent(type: type, fromBox: to - 1, toBox: to, at: at);
 
   group('déduplication par réponse', () {
     test('même réponse, ids différents → 1 carte fusionnée', () {
@@ -110,6 +116,44 @@ void main() {
         isPristineSeed: (c) => c.id == 'seed',
       );
       expect(r.merged.single.answer, 'Demo');
+    });
+  });
+
+  group('union de l\'historique (#26)', () {
+    test('fusion : les historiques des 2 appareils sont réunis, triés, dédupliqués',
+        () {
+      final local = [
+        card(id: 'L', answer: 'Mozart', createdAt: 50, updatedAt: 100, history: [
+          event(10, type: CardEventType.created, to: 1),
+          event(30, type: CardEventType.correct, to: 2),
+        ]),
+      ];
+      final remote = [
+        card(id: 'R', answer: 'Mozart', createdAt: 60, updatedAt: 200, history: [
+          event(30, type: CardEventType.correct, to: 2), // doublon exact
+          event(20, type: CardEventType.wrong, to: 1), // événement propre au remote
+        ]),
+      ];
+
+      final r = reconcileCards(local: local, remote: remote);
+      final h = r.merged.single.history;
+
+      // 3 événements uniques, triés par date croissante.
+      expect(h.length, 3);
+      expect(h.map((e) => e.at).toList(), [10, 20, 30]);
+      expect(h[1].type, CardEventType.wrong);
+    });
+
+    test('un historique plus long déclenche le push (dirty check)', () {
+      // Même carte des 2 côtés (même id, mêmes scalaires), mais le local a un
+      // événement de plus → la carte doit être re-poussée vers Supabase.
+      final base = card(id: 'X', answer: 'Foo', createdAt: 50, updatedAt: 100);
+      final localWithEvent = base.copyWith(history: [event(60)]);
+
+      final r = reconcileCards(local: [localWithEvent], remote: [base]);
+
+      expect(r.merged.single.history.length, 1);
+      expect(r.toUpsert.map((c) => c.id), ['X']);
     });
   });
 

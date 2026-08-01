@@ -27,6 +27,7 @@ FlashCard buildCard({
   int? createdAt,
   int leitnerBox = 1,
   int? nextReviewAt,
+  List<CardEvent>? history,
 }) {
   final created = createdAt ?? 1000;
   return FlashCard(
@@ -37,8 +38,18 @@ FlashCard buildCard({
     createdAt: created,
     leitnerBox: leitnerBox,
     nextReviewAt: nextReviewAt ?? created,
+    history: history ?? const [],
   );
 }
+
+/// Fabrique un [CardEvent] compact pour les tests.
+CardEvent buildEvent({
+  CardEventType type = CardEventType.correct,
+  int fromBox = 1,
+  int toBox = 2,
+  int at = 1000,
+}) =>
+    CardEvent(type: type, fromBox: fromBox, toBox: toBox, at: at);
 
 /// Millisecondes depuis l'époque pour `now + days` (jours peut être négatif).
 ///

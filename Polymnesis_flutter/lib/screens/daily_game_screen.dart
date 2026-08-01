@@ -171,7 +171,7 @@ class _DailyGameScreenState extends State<DailyGameScreen> {
     final provider = context.read<CardProvider>();
     setState(() => _feedback = _FeedbackState.skipped);
     _failedTodayIds.add(currentCard.id);
-    provider.leitnerIncorrect(currentCard);
+    provider.leitnerIncorrect(currentCard, skipped: true);
     _reinsertCard(currentCard);
     Future.delayed(const Duration(milliseconds: 3000), _nextCard);
   }
