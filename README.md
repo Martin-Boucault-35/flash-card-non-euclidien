@@ -92,6 +92,13 @@ Optionnelle, via un projet **Supabase** gratuit (table `cards`). Renseigne *Proj
 et *anon key* dans les paramètres de l'app pour activer la sync (et retrouver tes cartes
 sur un autre appareil). La réconciliation fusionne local et cloud sans créer de doublon.
 
+## 🗄️ Archive des quiz (backup)
+
+Un workflow (`ltds-archive.yml`) archive chaque jour les quiz joués dans une table
+Supabase **séparée** (`ltds_questions`) — un backup brut qui **n'alimente pas** le
+système Leitner de l'app. Un run manuel permet un *backfill* sur une plage de jours.
+SQL de la table : [`supabase/ltds_questions.sql`](supabase/ltds_questions.sql).
+
 ## 📦 Releases & déploiement
 
 Chaque **PR mergée sur `main`** qui bumpe la version du `pubspec` déclenche
