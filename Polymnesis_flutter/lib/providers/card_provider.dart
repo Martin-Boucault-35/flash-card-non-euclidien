@@ -123,7 +123,69 @@ class CardProvider extends ChangeNotifier {
       await performSync();
     }
 
+    // Reconstituer l'événement d'origine des cartes antérieures à l'historique
+    // (après la sync, pour tenir compte des cartes redescendues du cloud).
+    await backfillOrigins();
+
     _isInitialized = true;
+    notifyListeners();
+  }
+
+  /// Donne à chaque carte un premier événement daté de son [FlashCard.createdAt]
+  /// réel, pour les cartes créées avant l'arrivée de l'historique.
+  ///
+  /// - `acceptedAnswers` non vide ⇒ `imported` (seul l'import LTDS remplit ce
+  ///   champ, donc l'origine est certaine) ;
+  /// - sinon ⇒ `added`, libellé neutre : des cartes ont été importées AVANT
+  ///   l'arrivée des réponses acceptées, les dire « créées à la main » serait faux.
+  ///
+  /// Si une carte marquée `added` gagne plus tard des réponses acceptées (via un
+  /// ré-import), son événement d'origine est **promu** en `imported` sans perdre
+  /// sa date. Seul cet événement synthétique est modifiable : le véritable
+  /// historique de révisions n'est jamais retouché. Idempotent.
+  Future<void> backfillOrigins() async {
+    final changed = <FlashCard>[];
+
+    for (var i = 0; i < _cards.length; i++) {
+      final card = _cards[i];
+      final isImported = card.acceptedAnswers.isNotEmpty;
+
+      if (card.history.isEmpty) {
+        _cards[i] = card.copyWith(history: [
+          CardEvent(
+            type: isImported ? CardEventType.imported : CardEventType.added,
+            fromBox: 1,
+            toBox: 1,
+            at: card.createdAt,
+          ),
+        ]);
+        changed.add(_cards[i]);
+        continue;
+      }
+
+      // Promotion `added` -> `imported` quand les variantes arrivent après coup.
+      final first = card.history.first;
+      if (first.type == CardEventType.added && isImported) {
+        final promoted = [
+          CardEvent(
+            type: CardEventType.imported,
+            fromBox: first.fromBox,
+            toBox: first.toBox,
+            at: first.at, // on conserve la vraie date
+          ),
+          ...card.history.skip(1),
+        ];
+        _cards[i] = card.copyWith(history: promoted);
+        changed.add(_cards[i]);
+      }
+    }
+
+    if (changed.isEmpty) return; // rien à faire : aucune écriture inutile
+
+    await StorageService.saveCards(_cards);
+    if (_syncCredentials.enabled && SupabaseService.isReady) {
+      await SupabaseService.upsertCards(changed);
+    }
     notifyListeners();
   }
 

@@ -178,11 +178,9 @@ class CardDetailScreen extends StatelessWidget {
     );
   }
 
-  /// Événements qui font bouger la boîte (exclut création/import).
-  static List<CardEvent> _boxEvents(FlashCard card) => card.history
-      .where((e) =>
-          e.type != CardEventType.created && e.type != CardEventType.imported)
-      .toList();
+  /// Événements qui font bouger la boîte (exclut les événements d'origine).
+  static List<CardEvent> _boxEvents(FlashCard card) =>
+      card.history.where((e) => !e.type.isOrigin).toList();
 }
 
 class _SectionTitle extends StatelessWidget {
@@ -273,6 +271,11 @@ _EventStyle _eventStyle(CardEventType type) {
     case CardEventType.imported:
       return const _EventStyle(
           Icons.download_done, AppColors.slate400, 'Carte importée');
+    case CardEventType.added:
+      // Carte antérieure à l'historique : on ne sait pas si elle a été créée
+      // à la main ou importée, donc libellé neutre (jamais faux).
+      return const _EventStyle(
+          Icons.bookmark_added_outlined, AppColors.slate400, 'Carte ajoutée');
     case CardEventType.correct:
       return const _EventStyle(
           Icons.check_circle, AppColors.emerald400, 'Bonne réponse');

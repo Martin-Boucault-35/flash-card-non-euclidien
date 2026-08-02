@@ -264,8 +264,13 @@ void main() {
         expect(find.text('Révision Terminée !'), findsOneWidget);
         final replayed = provider.cards.firstWhere((c) => c.id == 'solo');
         expect(replayed.leitnerBox, 3);
-        // Les deux événements de la session sont conservés (#26).
-        expect(replayed.history.map((e) => e.type).toList(),
+        // Les deux événements de la session sont conservés (#26). On filtre
+        // l'événement d'origine ajouté au chargement par la migration (#34).
+        expect(
+            replayed.history
+                .where((e) => !e.type.isOrigin)
+                .map((e) => e.type)
+                .toList(),
             [CardEventType.wrong, CardEventType.correct]);
       },
     );

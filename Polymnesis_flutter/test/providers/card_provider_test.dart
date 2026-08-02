@@ -347,13 +347,18 @@ void main() {
   });
 
   group('CardProvider - historique des cartes (#26)', () {
+    // Depuis #34, toute carte reçoit un événement d'ORIGINE au chargement.
+    // Ces tests portent sur les événements de révision : on filtre l'origine.
+    List<CardEvent> reviews(FlashCard c) =>
+        c.history.where((e) => !e.type.isOrigin).toList();
+
     test('leitnerCorrect ajoute un événement correct (+1) avec from/to', () async {
       seedPrefs(cards: [buildCard(id: 'a', leitnerBox: 2)]);
       final provider = await makeInitializedProvider();
 
       await provider.leitnerCorrect(provider.cards.single);
 
-      final history = provider.cards.single.history;
+      final history = reviews(provider.cards.single);
       expect(history.length, 1);
       expect(history.single.type, CardEventType.correct);
       expect(history.single.fromBox, 2);
@@ -367,7 +372,7 @@ void main() {
 
       await provider.leitnerCorrect(provider.cards.single, easy: true);
 
-      final e = provider.cards.single.history.single;
+      final e = reviews(provider.cards.single).single;
       expect(e.type, CardEventType.correctFast);
       expect(e.fromBox, 2);
       expect(e.toBox, 4);
@@ -386,9 +391,9 @@ void main() {
           provider.cards.firstWhere((c) => c.id == 'b'),
           skipped: true);
 
-      expect(provider.cards.firstWhere((c) => c.id == 'a').history.single.type,
+      expect(reviews(provider.cards.firstWhere((c) => c.id == 'a')).single.type,
           CardEventType.wrong);
-      expect(provider.cards.firstWhere((c) => c.id == 'b').history.single.type,
+      expect(reviews(provider.cards.firstWhere((c) => c.id == 'b')).single.type,
           CardEventType.skipped);
     });
 
@@ -422,11 +427,96 @@ void main() {
 
       final card = provider.cards.single;
       // Les DEUX événements sont là (le wrong n'a pas été écrasé)...
-      expect(card.history.map((e) => e.type).toList(),
+      expect(reviews(card).map((e) => e.type).toList(),
           [CardEventType.wrong, CardEventType.correct]);
       // ...et la boîte repart de l'état à jour : 3 -> 2 (wrong), puis 2 -> 3.
       expect(card.history.last.fromBox, 2);
       expect(card.leitnerBox, 3);
+    });
+  });
+
+  group('CardProvider - backfill de l\'origine (#34)', () {
+    /// Carte avec des variantes (donc issue de l'import LTDS).
+    FlashCard importedCard({
+      required String id,
+      required String answer,
+      int createdAt = 5000,
+      List<CardEvent> history = const [],
+    }) =>
+        FlashCard(
+          id: id,
+          theme: FlashCardTheme.cultureG,
+          answer: answer,
+          triggers: const ['indice'],
+          createdAt: createdAt,
+          acceptedAnswers: const ['variante'],
+          history: history,
+        );
+
+    test('carte avec variantes => imported daté du createdAt réel', () async {
+      seedPrefs(cards: [importedCard(id: 'a', answer: 'Alpha', createdAt: 4242)]);
+      final provider = await makeInitializedProvider();
+
+      final e = provider.cards.single.history.single;
+      expect(e.type, CardEventType.imported);
+      expect(e.at, 4242); // la VRAIE date, pas aujourd'hui
+    });
+
+    test('carte sans variantes => added (neutre, jamais faux)', () async {
+      // Cas réel : cartes importées AVANT l'arrivée des réponses acceptées.
+      seedPrefs(cards: [buildCard(id: 'b', answer: 'Beta', createdAt: 777)]);
+      final provider = await makeInitializedProvider();
+
+      final e = provider.cards.single.history.single;
+      expect(e.type, CardEventType.added);
+      expect(e.at, 777);
+    });
+
+    test('carte déjà historisée : inchangée', () async {
+      final existing = buildEvent(type: CardEventType.correct, at: 9000);
+      seedPrefs(cards: [
+        buildCard(id: 'c', answer: 'Gamma', history: [existing]),
+      ]);
+      final provider = await makeInitializedProvider();
+
+      // Aucun événement d'origine n'est inséré a posteriori.
+      expect(provider.cards.single.history.length, 1);
+      expect(provider.cards.single.history.single.type, CardEventType.correct);
+    });
+
+    test('promotion added -> imported quand les variantes arrivent après coup',
+        () async {
+      // La carte a été backfillée en `added`, puis un ré-import lui a apporté
+      // ses réponses acceptées : l'origine doit être corrigée, date conservée.
+      seedPrefs(cards: [
+        importedCard(
+          id: 'd',
+          answer: 'Delta',
+          createdAt: 1234,
+          history: [
+            buildEvent(type: CardEventType.added, fromBox: 1, toBox: 1, at: 1234),
+            buildEvent(type: CardEventType.correct, fromBox: 1, toBox: 2, at: 8000),
+          ],
+        ),
+      ]);
+      final provider = await makeInitializedProvider();
+
+      final h = provider.cards.single.history;
+      expect(h.first.type, CardEventType.imported); // promu
+      expect(h.first.at, 1234); // date d'origine conservée
+      expect(h.length, 2); // le vrai historique n'est pas touché
+      expect(h.last.type, CardEventType.correct);
+    });
+
+    test('idempotent : relancer le backfill ne change plus rien', () async {
+      seedPrefs(cards: [buildCard(id: 'e', answer: 'Epsilon', createdAt: 300)]);
+      final provider = await makeInitializedProvider();
+      final after = provider.cards.single.history;
+
+      await provider.backfillOrigins();
+
+      expect(provider.cards.single.history.length, after.length);
+      expect(provider.cards.single.history.single.at, 300);
     });
   });
 
