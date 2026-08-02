@@ -211,4 +211,66 @@ void main() {
       expect(find.text('Mémoire Non-Euclidienne'), findsOneWidget);
     });
   });
+
+  group('MainScreen - bouton retour (#32)', () {
+    // handlePopRoute() simule le retour matériel Android.
+    Future<void> pressBack(WidgetTester tester) async {
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('revient à l\'onglet précédent au lieu de quitter',
+        (tester) async {
+      await mountMainScreen(tester);
+
+      // Accueil -> Pokédex -> Jouer
+      await tester.tap(find.text('Pokédex'));
+      await tester.pumpAndSettle();
+      expect(find.text('Mon Pokédex'), findsOneWidget);
+
+      await tester.tap(find.text('Jouer'));
+      await tester.pumpAndSettle();
+      expect(find.text('Configuration de la Partie'), findsOneWidget);
+
+      // Retour -> Pokédex, puis retour -> Accueil.
+      await pressBack(tester);
+      expect(find.text('Mon Pokédex'), findsOneWidget);
+
+      await pressBack(tester);
+      expect(find.text('Mémoire Non-Euclidienne'), findsOneWidget);
+    });
+
+    testWidgets('sur l\'accueil, le 1er retour ne quitte pas mais prévient',
+        (tester) async {
+      await mountMainScreen(tester);
+
+      // Déjà sur l'accueil : l'historique est vide.
+      await pressBack(tester);
+
+      expect(find.text('Appuyez à nouveau pour quitter'), findsOneWidget);
+      // L'app est toujours là.
+      expect(find.text('Mémoire Non-Euclidienne'), findsOneWidget);
+    });
+
+    testWidgets('les allers-retours ne gonflent pas l\'historique',
+        (tester) async {
+      await mountMainScreen(tester);
+
+      // Bascule plusieurs fois entre deux onglets.
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(find.text('Pokédex'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Accueil'));
+        await tester.pumpAndSettle();
+      }
+
+      // Un seul retour suffit pour revenir au Pokédex...
+      await pressBack(tester);
+      expect(find.text('Mon Pokédex'), findsOneWidget);
+
+      // ...et le suivant ramène à l'accueil (historique borné, pas 6 crans).
+      await pressBack(tester);
+      expect(find.text('Mémoire Non-Euclidienne'), findsOneWidget);
+    });
+  });
 }

@@ -56,8 +56,81 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
+  /// Onglets visités avant l'actuel. Les onglets ne sont pas des routes : sans
+  /// cette pile, le bouton retour quitterait l'app depuis n'importe quel onglet.
+  final List<int> _tabHistory = [];
+
+  /// Dernier appui sur "retour" depuis l'accueil (double-appui pour quitter).
+  DateTime? _lastBackPress;
+
   void _navigateTo(int index) {
-    setState(() => _currentIndex = index);
+    if (index == _currentIndex) return;
+    setState(() {
+      // Un seul passage par onglet dans l'historique : sans ça, faire des
+      // allers-retours entre deux onglets obligerait à appuyer autant de fois
+      // sur "retour" pour ressortir. La profondeur reste <= nombre d'onglets.
+      _tabHistory
+        ..remove(_currentIndex)
+        ..remove(index)
+        ..add(_currentIndex);
+      _currentIndex = index;
+    });
+  }
+
+  /// Retour matériel : revient à l'onglet précédent tant qu'il y en a un.
+  /// Sur l'accueil (pile vide), demande une confirmation avant de quitter.
+  void _handleBack(bool didPop) {
+    if (didPop) return; // déjà géré par le Navigator (ex. page de détail)
+
+    if (_tabHistory.isNotEmpty) {
+      setState(() => _currentIndex = _tabHistory.removeLast());
+      return;
+    }
+
+    // Plus d'historique mais on n'est pas à l'accueil : le retour y ramène.
+    // On ne propose de quitter que depuis l'accueil (convention Android).
+    if (_currentIndex != 0) {
+      setState(() => _currentIndex = 0);
+      return;
+    }
+
+    final now = DateTime.now();
+    final recent = _lastBackPress != null &&
+        now.difference(_lastBackPress!) < const Duration(seconds: 2);
+    if (recent) {
+      SystemNavigator.pop(); // quitte pour de bon
+      return;
+    }
+
+    _lastBackPress = now;
+    // SnackBar FLOTTANTE avec marge : en mode fixe elle se glisse derrière la
+    // barre de navigation (la nôtre + celle du système) et devient invisible.
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.logout, size: 18, color: AppColors.slate200),
+              SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  'Appuyez à nouveau pour quitter',
+                  style: TextStyle(color: AppColors.slate200),
+                ),
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 2),
+          backgroundColor: AppColors.slate700,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
   }
 
   void _openSettings() {
@@ -78,7 +151,7 @@ class _MainScreenState extends State<MainScreen> {
   void _handleEditCard(FlashCard card) {
     final provider = context.read<CardProvider>();
     provider.setEditingCard(card);
-    setState(() => _currentIndex = 1); // Navigate to create screen
+    _navigateTo(1); // écran Créer (empile l'onglet courant pour le retour)
   }
 
   @override
@@ -123,17 +196,23 @@ class _MainScreenState extends State<MainScreen> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.slate900,
-      appBar: _buildAppBar(provider),
-      body: Column(
-        children: [
-          if (provider.syncError && provider.syncCredentials.enabled)
-            _SyncErrorBanner(onRetry: () => provider.performSync()),
-          Expanded(child: _buildBody()),
-        ],
+    return PopScope(
+      // On intercepte toujours le retour : _handleBack décide de revenir à
+      // l'onglet précédent ou de demander confirmation pour quitter.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) => _handleBack(didPop),
+      child: Scaffold(
+        backgroundColor: AppColors.slate900,
+        appBar: _buildAppBar(provider),
+        body: Column(
+          children: [
+            if (provider.syncError && provider.syncCredentials.enabled)
+              _SyncErrorBanner(onRetry: () => provider.performSync()),
+            Expanded(child: _buildBody()),
+          ],
+        ),
+        bottomNavigationBar: _buildBottomNav(),
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
