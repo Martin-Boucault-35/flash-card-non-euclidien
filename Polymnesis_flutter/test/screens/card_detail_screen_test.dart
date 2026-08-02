@@ -106,13 +106,16 @@ void main() {
       expect(find.textContaining('boîte 2 → 4'), findsOneWidget);
     });
 
-    testWidgets('état vide quand la carte n\'a pas d\'historique',
+    testWidgets('carte jamais révisée : seulement son événement d\'origine',
         (tester) async {
+      // Depuis la migration #34, toute carte reçoit un événement d'origine au
+      // chargement : l'état "aucun historique" n'est donc plus atteignable en
+      // pratique. Une carte neuve montre son origine, et rien d'autre.
       seedPrefs(cards: [buildCard(id: 'neuve', answer: 'Neuve')]);
       await pumpDetail(tester, id: 'neuve');
 
-      expect(find.text('Historique (0)'), findsOneWidget);
-      expect(find.textContaining('Pas encore d\'historique'), findsOneWidget);
+      expect(find.text('Historique (1)'), findsOneWidget);
+      expect(find.text('Carte ajoutée'), findsOneWidget);
     });
 
     testWidgets('carte introuvable (supprimée) : message dédié', (tester) async {

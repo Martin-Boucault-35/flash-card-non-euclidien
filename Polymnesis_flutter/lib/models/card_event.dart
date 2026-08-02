@@ -2,6 +2,7 @@
 enum CardEventType {
   created, // carte créée à la main
   imported, // carte créée par l'import LTDS
+  added, // origine inconnue (carte antérieure à l'historique) — libellé neutre
   correct, // bonne réponse au quotidien (+1 boîte)
   correctFast, // bonne réponse rapide (+2 boîtes)
   wrong, // mauvaise réponse (-1 boîte)
@@ -13,6 +14,10 @@ enum CardEventType {
       orElse: () => CardEventType.correct,
     );
   }
+
+  /// Événement d'origine (naissance de la carte) : ne fait pas bouger de boîte.
+  bool get isOrigin =>
+      this == created || this == imported || this == added;
 }
 
 /// Un événement de l'historique d'une [FlashCard] : ce qui s'est passé,
