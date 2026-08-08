@@ -435,6 +435,97 @@ void main() {
     });
   });
 
+  group('CardProvider - sync des réglages (#42)', () {
+    test('applyRemoteSettings : le distant plus récent est appliqué', () async {
+      seedPrefs(cards: [buildCard(id: 'a')]);
+      final provider = await makeInitializedProvider();
+
+      await provider.applyRemoteSettings(SyncedSettings(
+        leitner: LeitnerSettings(
+            intervals: const [2, 4, 8, 16, 32, 64], goldenSeconds: 9),
+        leitnerUpdatedAt: 1000,
+        ltds: LtdsSettings(token: 'jeton-distant'),
+        ltdsUpdatedAt: 2000,
+      ));
+
+      expect(provider.leitnerSettings.goldenSeconds, 9);
+      expect(provider.leitnerSettings.intervals, [2, 4, 8, 16, 32, 64]);
+      expect(provider.ltdsSettings.token, 'jeton-distant');
+      // Persisté : un nouveau provider relit les mêmes valeurs + horloges.
+      final reloaded = await makeInitializedProvider();
+      expect(reloaded.leitnerSettings.goldenSeconds, 9);
+      expect(reloaded.ltdsSettings.token, 'jeton-distant');
+    });
+
+    test('un pull Leitner qui réduit boxCount REMAPPE les cartes (#23)',
+        () async {
+      seedPrefs(cards: [
+        buildCard(id: 'haut', leitnerBox: 6),
+        buildCard(id: 'maitre', answer: 'M', leitnerBox: 7), // maîtrisée
+      ]);
+      final provider = await makeInitializedProvider();
+
+      await provider.applyRemoteSettings(SyncedSettings(
+        leitner: LeitnerSettings(intervals: const [1, 3, 7, 14, 30]), // 5 boîtes
+        leitnerUpdatedAt: 1000,
+        ltds: LtdsSettings(),
+        ltdsUpdatedAt: 0,
+      ));
+
+      // Boîte 6 n'existe plus -> dernière boîte ; maîtrisée le reste (6 = 5+1).
+      expect(provider.cards.firstWhere((c) => c.id == 'haut').leitnerBox, 5);
+      expect(provider.cards.firstWhere((c) => c.id == 'maitre').leitnerBox, 6);
+      // Et le déplacement est tracé.
+      expect(
+          provider.cards
+              .firstWhere((c) => c.id == 'haut')
+              .history
+              .last
+              .type,
+          CardEventType.boxesResized);
+    });
+
+    test('applyRemoteSettings : un distant PLUS VIEUX est ignoré', () async {
+      seedPrefs(cards: [buildCard(id: 'a')]);
+      final provider = await makeInitializedProvider();
+
+      // Le local prend de vraies modifications (horloges > 0)...
+      await provider
+          .updateLeitnerSettings(LeitnerSettings(goldenSeconds: 12));
+      await provider.updateLtdsSettings(LtdsSettings(token: 'récent'));
+      // ...un distant daté d'avant ne doit rien écraser.
+      await provider.applyRemoteSettings(SyncedSettings(
+        leitner: LeitnerSettings(goldenSeconds: 3),
+        leitnerUpdatedAt: 1, // très vieux
+        ltds: LtdsSettings(token: 'vieux'),
+        ltdsUpdatedAt: 1,
+      ));
+
+      expect(provider.leitnerSettings.goldenSeconds, 12);
+      expect(provider.ltdsSettings.token, 'récent');
+    });
+
+    test('ré-enregistrer des réglages IDENTIQUES n\'avance pas l\'horloge',
+        () async {
+      seedPrefs(cards: [buildCard(id: 'a')]);
+      final provider = await makeInitializedProvider();
+
+      // Sauvegarde à l'identique (le modal re-sauve tout à chaque Enregistrer).
+      await provider.updateLeitnerSettings(LeitnerSettings());
+      await provider.updateLtdsSettings(LtdsSettings());
+
+      // Horloges toujours à 0 => un distant à 1 ms gagnerait encore.
+      await provider.applyRemoteSettings(SyncedSettings(
+        leitner: LeitnerSettings(goldenSeconds: 7),
+        leitnerUpdatedAt: 1,
+        ltds: LtdsSettings(token: 't'),
+        ltdsUpdatedAt: 1,
+      ));
+      expect(provider.leitnerSettings.goldenSeconds, 7);
+      expect(provider.ltdsSettings.token, 't');
+    });
+  });
+
   group('CardProvider - boîtes dynamiques (#23)', () {
     // Réglages par défaut : 6 boîtes (maîtrisé = 7).
     LeitnerSettings fiveBoxes() =>
