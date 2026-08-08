@@ -45,6 +45,7 @@ jobs:
     permissions:
       contents: write # créer le tag + la Release
       issues: read # lire les issues résolues par les PR de la release
+      pull-requests: read # la requête GraphQL passe par repository.pullRequest
     env:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
     steps:
@@ -133,6 +134,10 @@ jobs:
               }' \
               -f owner="${REPO%/*}" -f name="${REPO#*/}" -F number="$pr" \
               --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[] | "- #\(.number) \(.title)"' 2>/dev/null || true)
+            # Ne garder QUE des lignes à la forme attendue : en cas d'erreur,
+            # gh imprime le JSON d'erreur sur stdout — il ne doit jamais
+            # atteindre les notes de release (vu sur v1.8.0).
+            issues=$(printf '%s' "$issues" | grep '^- #' || true)
             [ -n "$issues" ] && lines="${lines}${issues}"$'\n'
           done
 
