@@ -44,6 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # créer le tag + la Release
+      issues: read # lire les issues résolues par les PR de la release
     env:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
     steps:
@@ -97,6 +98,55 @@ jobs:
           name: v${{ needs.check.outputs.version }}
           generate_release_notes: true # liste auto des PR depuis le tag précédent
           files: Polymnesis_flutter/build/app/outputs/flutter-apk/app-release.apk
+
+      # Les notes auto listent les PR ; on y ajoute les ISSUES qu'elles ferment
+      # (relation créée par les "Closes #N"), pour lire d'un coup d'œil ce que
+      # la version résout. Purement cosmétique : n'échoue jamais la release.
+      - name: Ajoute les issues résolues aux notes
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ needs.check.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          body=$(gh release view "$TAG" --repo "$REPO" --json body --jq .body)
+
+          # Numéros de PR cités dans les notes auto (liens /pull/N).
+          prs=$(printf '%s' "$body" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+' | sort -un || true)
+          if [ -z "$prs" ]; then
+            echo "Aucune PR dans les notes : rien à ajouter."
+            exit 0
+          fi
+
+          lines=""
+          for pr in $prs; do
+            # closingIssuesReferences = le lien formel créé par "Closes #N".
+            issues=$(gh api graphql -f query='
+              query($owner:String!, $name:String!, $number:Int!) {
+                repository(owner:$owner, name:$name) {
+                  pullRequest(number:$number) {
+                    closingIssuesReferences(first:10) { nodes { number title } }
+                  }
+                }
+              }' \
+              -f owner="${REPO%/*}" -f name="${REPO#*/}" -F number="$pr" \
+              --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[] | "- #\(.number) \(.title)"' 2>/dev/null || true)
+            [ -n "$issues" ] && lines="${lines}${issues}"$'\n'
+          done
+
+          if [ -z "$lines" ]; then
+            echo "Aucune issue fermée par ces PR."
+            exit 0
+          fi
+
+          # Dédoublonne (deux PR peuvent fermer la même issue) en gardant l'ordre.
+          lines=$(printf '%s' "$lines" | awk 'NF && !seen[$0]++')
+
+          printf '%s\n\n## 🎯 Issues résolues\n\n%s\n' "$body" "$lines" > /tmp/notes.md
+          gh release edit "$TAG" --repo "$REPO" --notes-file /tmp/notes.md
+          echo "Notes enrichies :"; printf '%s\n' "$lines"
 
   # 3) Déploie le Web sur GitHub Pages (Settings → Pages → Source = GitHub Actions).
   deploy-pages:
