@@ -20,9 +20,9 @@ on:
   pull_request:
     types: [synchronize, reopened, labeled, unlabeled]
 
-# GitHub ne sait pas filtrer sur le NOM du label dans `on:` : l'événement part
-# pour chaque label posé. Le tri se fait donc ici (voir le `if:` du job) et ce
-# groupe annule ce qui resterait obsolète.
+# Poser N labels déclenche N événements (GitHub ne sait pas filtrer sur le nom
+# du label dans `on:`). Seul le DERNIER run compte — il voit tous les labels —
+# donc les précédents, devenus obsolètes, sont annulés.
 concurrency:
   group: version-check-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -32,18 +32,15 @@ permissions:
 
 jobs:
   version-check:
-    # Deux filtres :
-    # 1. Le bump de version ne compte que pour une release (merge vers main) :
-    #    pas sur les sous-PR d'une branche épique (base ≠ main).
-    # 2. Sur labeled/unlabeled, ne réagir QU'AUX labels `type:` — seuls eux
-    #    changent le bump attendu. Poser `scope:`/`size:` skippe le job
-    #    instantanément (aucune minute de runner consommée).
-    if: >-
-      github.event.pull_request.base.ref == 'main'
-      && (
-        (github.event.action != 'labeled' && github.event.action != 'unlabeled')
-        || startsWith(github.event.label.name, 'type:')
-      )
+    # Le bump de version ne compte que pour une release (merge vers main) :
+    # on n'exige pas ce check sur les sous-PR d'une branche épique (base ≠ main).
+    #
+    # NE PAS filtrer ici sur le NOM du label : chaque run relit la liste
+    # COMPLÈTE des labels, ces exécutions sont donc des re-validations, pas des
+    # doublons. Et surtout, un job `skipped` est compté comme RÉUSSI par les
+    # checks obligatoires — conditionner ce job le rendrait contournable
+    # (constaté : PR mergeable alors que rien n'avait été vérifié).
+    if: github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     env:
       # Tableau JSON des noms de labels, ex: ["type: feature","scope: ui"]
