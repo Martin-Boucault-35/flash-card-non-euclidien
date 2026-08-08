@@ -18,9 +18,12 @@ permissions:
   contents: read
   pull-requests: read
 
+# Sur une PR, un nouveau push annule le run précédent (inutile de tester un
+# commit déjà remplacé). Sur `main`, JAMAIS d'annulation : chaque commit de la
+# branche de prod doit être validé jusqu'au bout.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:

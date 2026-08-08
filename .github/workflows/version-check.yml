@@ -8,22 +8,42 @@ name: Version check
 #   type: tech       -> libre (bump ou pas ; couvre l'infra ET les PR de release)
 # Exactement 1 label "type:" est requis.
 #
-# Se relance aussi quand on ajoute/retire un label (types: labeled/unlabeled),
-# sinon un label posé après l'ouverture ne re-déclencherait pas le check.
+# Se relance quand on ajoute/retire un label (types: labeled/unlabeled), sinon
+# un label posé après l'ouverture ne re-déclencherait pas le check.
+#
+# `opened` est volontairement ABSENT : à la création d'une PR les labels ne sont
+# pas encore posés (gh les ajoute juste après), ce run échouait donc toujours.
+# Conséquence assumée : une PR sans label `type:` ne rapporte jamais ce check
+# et reste bloquée au merge — ce qui est exactement le but du garde-fou.
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [synchronize, reopened, labeled, unlabeled]
+
+# GitHub ne sait pas filtrer sur le NOM du label dans `on:` : l'événement part
+# pour chaque label posé. Le tri se fait donc ici (voir le `if:` du job) et ce
+# groupe annule ce qui resterait obsolète.
+concurrency:
+  group: version-check-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   version-check:
-    # Le bump de version ne compte que pour une release (merge vers main).
-    # On n'exige donc ce check que sur les PR ciblant main — pas sur les
-    # sous-PR d'une branche épique (base ≠ main).
-    if: github.event.pull_request.base.ref == 'main'
+    # Deux filtres :
+    # 1. Le bump de version ne compte que pour une release (merge vers main) :
+    #    pas sur les sous-PR d'une branche épique (base ≠ main).
+    # 2. Sur labeled/unlabeled, ne réagir QU'AUX labels `type:` — seuls eux
+    #    changent le bump attendu. Poser `scope:`/`size:` skippe le job
+    #    instantanément (aucune minute de runner consommée).
+    if: >-
+      github.event.pull_request.base.ref == 'main'
+      && (
+        (github.event.action != 'labeled' && github.event.action != 'unlabeled')
+        || startsWith(github.event.label.name, 'type:')
+      )
     runs-on: ubuntu-latest
     env:
       # Tableau JSON des noms de labels, ex: ["type: feature","scope: ui"]
