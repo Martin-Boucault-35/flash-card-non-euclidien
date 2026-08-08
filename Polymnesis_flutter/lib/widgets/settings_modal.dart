@@ -422,6 +422,29 @@ class _SettingsModalState extends State<SettingsModal>
   }
 
   // ==================== ONGLET LEITNER ====================
+
+  /// Ajoute une boîte à la fin, pré-remplie avec le double du dernier
+  /// intervalle (les paliers Leitner vont en s'espaçant).
+  void _addBox() {
+    final last = _intervalControllers.isEmpty
+        ? 0
+        : int.tryParse(_intervalControllers.last.text) ?? 0;
+    final suggested = last > 0 ? last * 2 : 1;
+    setState(() {
+      _intervalControllers.add(TextEditingController(text: '$suggested'));
+    });
+  }
+
+  /// Supprime la boîte [index] (jamais la dernière restante).
+  void _removeBox(int index) {
+    if (_intervalControllers.length <= 1) return;
+    final removed = _intervalControllers[index];
+    setState(() => _intervalControllers.removeAt(index));
+    // On libère APRÈS le rebuild : le TextField qui l'utilisait doit d'abord
+    // être démonté, sinon il toucherait un controller déjà disposé.
+    WidgetsBinding.instance.addPostFrameCallback((_) => removed.dispose());
+  }
+
   Widget _buildLeitnerSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -442,29 +465,31 @@ class _SettingsModalState extends State<SettingsModal>
         ),
         const SizedBox(height: 8),
         const Text(
-          'Configurez l\'espacement entre chaque boîte (en jours). Quand vous répondez bien, la carte monte d\'une boîte. Sinon, elle retourne en boîte 1.',
+          'Configurez l\'espacement entre chaque boîte (en jours). Quand vous répondez bien, la carte monte d\'une boîte. Sinon, elle retourne en boîte 1. Après la dernière boîte, la carte est « Maîtrisée ».',
           style: TextStyle(fontSize: 13, color: AppColors.slate400),
         ),
         const SizedBox(height: 16),
 
         ...List.generate(_intervalControllers.length, (i) {
+          final isLast = i == _intervalControllers.length - 1;
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
               children: [
                 SizedBox(
-                  width: 90,
+                  width: 118,
                   child: Text(
-                    'Boîte ${i + 1} → ${i + 2}',
+                    // Sortir de la dernière boîte, c'est être maîtrisé.
+                    isLast ? 'Boîte ${i + 1} → Maîtrisé' : 'Boîte ${i + 1} → ${i + 2}',
                     style: const TextStyle(
                       fontSize: 13,
                       color: AppColors.slate300,
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 SizedBox(
-                  width: 60,
+                  width: 56,
                   child: TextField(
                     controller: _intervalControllers[i],
                     keyboardType: TextInputType.number,
@@ -483,15 +508,45 @@ class _SettingsModalState extends State<SettingsModal>
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 const Text(
-                  'jours',
+                  'j',
                   style: TextStyle(fontSize: 13, color: AppColors.slate500),
+                ),
+                const Spacer(),
+                // Il faut au moins une boîte : on ne peut pas tout supprimer.
+                IconButton(
+                  key: ValueKey('removeBox$i'),
+                  tooltip: 'Supprimer cette boîte',
+                  onPressed: _intervalControllers.length > 1
+                      ? () => _removeBox(i)
+                      : null,
+                  icon: const Icon(Icons.remove_circle_outline, size: 20),
+                  color: AppColors.slate500,
+                  disabledColor: AppColors.slate700,
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
               ],
             ),
           );
         }),
+
+        // Ajout d'une boîte (aucune limite haute)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const ValueKey('addBoxButton'),
+            onPressed: _addBox,
+            icon: const Icon(Icons.add_circle_outline, size: 18),
+            label: const Text('Ajouter une boîte'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.indigo400,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+          ),
+        ),
 
         const SizedBox(height: 8),
 
