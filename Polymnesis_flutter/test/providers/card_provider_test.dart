@@ -435,6 +435,99 @@ void main() {
     });
   });
 
+  group('CardProvider - boîtes dynamiques (#23)', () {
+    // Réglages par défaut : 6 boîtes (maîtrisé = 7).
+    LeitnerSettings fiveBoxes() =>
+        LeitnerSettings(intervals: const [1, 3, 7, 14, 30]);
+    LeitnerSettings eightBoxes() =>
+        LeitnerSettings(intervals: const [1, 3, 7, 14, 30, 90, 180, 365]);
+
+    test('boîte supprimée => carte ramenée à la dernière boîte', () async {
+      seedPrefs(cards: [buildCard(id: 'a', leitnerBox: 6)]);
+      final provider = await makeInitializedProvider();
+
+      await provider.updateLeitnerSettings(fiveBoxes());
+
+      // Boîte 6 n'existe plus (5 boîtes) => dernière boîte avant maîtrisé.
+      expect(provider.cards.single.leitnerBox, 5);
+    });
+
+    test('une carte maîtrisée le reste après réduction', () async {
+      // Boîte 7 avec 6 boîtes = maîtrisée.
+      seedPrefs(cards: [buildCard(id: 'a', leitnerBox: 7)]);
+      final provider = await makeInitializedProvider();
+
+      await provider.updateLeitnerSettings(fiveBoxes());
+
+      // Maîtrisé = boxCount + 1 = 6 : elle ne redescend pas en révision.
+      expect(provider.cards.single.leitnerBox, 6);
+      expect(provider.cards.single.leitnerBox,
+          greaterThan(provider.leitnerSettings.boxCount));
+    });
+
+    test('une carte maîtrisée le reste après ajout de boîtes', () async {
+      seedPrefs(cards: [buildCard(id: 'a', leitnerBox: 7)]);
+      final provider = await makeInitializedProvider();
+
+      await provider.updateLeitnerSettings(eightBoxes());
+
+      // Sans remap, la boîte 7 serait devenue une boîte ordinaire.
+      expect(provider.cards.single.leitnerBox, 9); // 8 boîtes + 1
+      expect(provider.cards.single.leitnerBox,
+          greaterThan(provider.leitnerSettings.boxCount));
+    });
+
+    test('les cartes dans des boîtes encore valides ne bougent pas', () async {
+      seedPrefs(cards: [
+        buildCard(id: 'a', leitnerBox: 1),
+        buildCard(id: 'b', answer: 'B', leitnerBox: 3),
+      ]);
+      final provider = await makeInitializedProvider();
+
+      await provider.updateLeitnerSettings(fiveBoxes());
+
+      expect(provider.cards.firstWhere((c) => c.id == 'a').leitnerBox, 1);
+      expect(provider.cards.firstWhere((c) => c.id == 'b').leitnerBox, 3);
+    });
+
+    test('le déplacement est tracé dans l\'historique', () async {
+      seedPrefs(cards: [buildCard(id: 'a', leitnerBox: 6)]);
+      final provider = await makeInitializedProvider();
+
+      await provider.updateLeitnerSettings(fiveBoxes());
+
+      final e = provider.cards.single.history.last;
+      expect(e.type, CardEventType.boxesResized);
+      expect(e.fromBox, 6);
+      expect(e.toBox, 5);
+    });
+
+    test('la carte déplacée est replanifiée sur sa nouvelle boîte', () async {
+      seedPrefs(cards: [buildCard(id: 'a', leitnerBox: 6)]);
+      final provider = await makeInitializedProvider();
+
+      await provider.updateLeitnerSettings(fiveBoxes());
+
+      // Boîte 5 => intervalle 30 jours dans fiveBoxes().
+      final expected = daysFromNowMillis(30);
+      expect((provider.cards.single.nextReviewAt - expected).abs(),
+          lessThan(const Duration(minutes: 1).inMilliseconds));
+    });
+
+    test('changer seulement les intervalles ne déplace aucune carte', () async {
+      seedPrefs(cards: [buildCard(id: 'a', leitnerBox: 6)]);
+      final provider = await makeInitializedProvider();
+      final before = provider.cards.single.history.length;
+
+      // Même nombre de boîtes, durées différentes.
+      await provider.updateLeitnerSettings(
+          LeitnerSettings(intervals: const [2, 4, 8, 16, 32, 64]));
+
+      expect(provider.cards.single.leitnerBox, 6);
+      expect(provider.cards.single.history.length, before); // aucun événement
+    });
+  });
+
   group('CardProvider - backfill de l\'origine (#34)', () {
     /// Carte avec des variantes (donc issue de l'import LTDS).
     FlashCard importedCard({

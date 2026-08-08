@@ -288,6 +288,9 @@ _EventStyle _eventStyle(CardEventType type) {
     case CardEventType.skipped:
       return const _EventStyle(
           Icons.skip_next, AppColors.red400, 'Question passée');
+    case CardEventType.boxesResized:
+      return const _EventStyle(
+          Icons.tune, AppColors.slate400, 'Boîtes reconfigurées');
   }
 }
 

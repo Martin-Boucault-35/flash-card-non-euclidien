@@ -262,6 +262,83 @@ void main() {
       expect(savedLeitner!.intervals, [1, 3, 7, 14, 1, 90]);
     });
 
+    testWidgets('ajouter une boîte : un champ de plus, sauvegardé', (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(),
+        leitnerSettings: LeitnerSettings(),
+      );
+
+      await openTab(tester, 'Leitner');
+      expect(intervalFields(), findsNWidgets(6));
+
+      await tester.ensureVisible(find.byKey(const ValueKey('addBoxButton')));
+      await tester.tap(find.byKey(const ValueKey('addBoxButton')));
+      await tester.pumpAndSettle();
+
+      expect(intervalFields(), findsNWidgets(7));
+
+      await tester.tap(find.text('Enregistrer'));
+      await tester.pumpAndSettle();
+
+      expect(savedLeitner!.boxCount, 7);
+      // La nouvelle boîte est pré-remplie au double de la précédente (90 -> 180).
+      expect(savedLeitner!.intervals.last, 180);
+    });
+
+    testWidgets('supprimer une boîte : un champ de moins, sauvegardé',
+        (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(),
+        leitnerSettings: LeitnerSettings(),
+      );
+
+      await openTab(tester, 'Leitner');
+
+      // Supprime la 3e boîte (intervalle 7 j).
+      await tester.ensureVisible(find.byKey(const ValueKey('removeBox2')));
+      await tester.tap(find.byKey(const ValueKey('removeBox2')));
+      await tester.pumpAndSettle();
+
+      expect(intervalFields(), findsNWidgets(5));
+
+      await tester.tap(find.text('Enregistrer'));
+      await tester.pumpAndSettle();
+
+      expect(savedLeitner!.boxCount, 5);
+      expect(savedLeitner!.intervals, [1, 3, 14, 30, 90]); // le 7 a sauté
+    });
+
+    testWidgets('la dernière boîte ne peut pas être supprimée', (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(),
+        leitnerSettings: LeitnerSettings(intervals: const [1]),
+      );
+
+      await openTab(tester, 'Leitner');
+      expect(intervalFields(), findsNWidgets(1));
+
+      final btn = tester.widget<IconButton>(
+        find.byKey(const ValueKey('removeBox0')),
+      );
+      expect(btn.onPressed, isNull); // désactivé : il faut au moins une boîte
+    });
+
+    testWidgets('la dernière ligne indique « → Maîtrisé »', (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(),
+        leitnerSettings: LeitnerSettings(),
+      );
+
+      await openTab(tester, 'Leitner');
+
+      expect(find.text('Boîte 6 → Maîtrisé'), findsOneWidget);
+      expect(find.text('Boîte 1 → 2'), findsOneWidget);
+    });
+
     testWidgets('modifier le temps "réponse rapide" est enregistré',
         (tester) async {
       await pumpModal(

@@ -6,7 +6,8 @@ enum CardEventType {
   correct, // bonne réponse au quotidien (+1 boîte)
   correctFast, // bonne réponse rapide (+2 boîtes)
   wrong, // mauvaise réponse (-1 boîte)
-  skipped; // question passée (-1 boîte)
+  skipped, // question passée (-1 boîte)
+  boxesResized; // déplacée suite à un changement du nombre de boîtes
 
   static CardEventType fromString(String value) {
     return CardEventType.values.firstWhere(

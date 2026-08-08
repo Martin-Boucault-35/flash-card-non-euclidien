@@ -443,9 +443,79 @@ class CardProvider extends ChangeNotifier {
 
   /// Met à jour les paramètres Leitner
   Future<void> updateLeitnerSettings(LeitnerSettings settings) async {
+    final oldCount = _leitnerSettings.boxCount;
+    final newCount = settings.boxCount;
+
     _leitnerSettings = settings;
     await StorageService.saveLeitnerSettings(settings);
+
+    if (newCount != oldCount) {
+      await _remapCardsToBoxes(oldCount: oldCount, newCount: newCount);
+    }
+
     notifyListeners();
+  }
+
+  /// Replace les cartes quand le nombre de boîtes change.
+  ///
+  /// - Une carte **maîtrisée** le reste (elle était au-delà de l'ancienne
+  ///   dernière boîte, elle passe au-delà de la nouvelle) : on ne remet jamais
+  ///   en révision une carte déjà acquise.
+  /// - Une carte dont la boîte **disparaît** atterrit sur la dernière boîte
+  ///   avant « Maîtrisé » (ex. boîte 6 alors qu'il n'en reste que 5 -> boîte 5).
+  /// - Les autres ne bougent pas.
+  ///
+  /// Le déplacement est tracé dans l'historique pour que le graphe reste
+  /// cohérent (sinon la boîte courante ne correspondrait plus au dernier
+  /// événement). La date de prochaine révision est recalculée sur la nouvelle
+  /// boîte, sauf pour les cartes maîtrisées qui gardent leur échéance lointaine.
+  Future<void> _remapCardsToBoxes({
+    required int oldCount,
+    required int newCount,
+  }) async {
+    final changed = <FlashCard>[];
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    for (var i = 0; i < _cards.length; i++) {
+      final card = _cards[i];
+      final wasMastered = card.leitnerBox > oldCount;
+
+      final int target;
+      if (wasMastered) {
+        target = newCount + 1; // reste maîtrisée
+      } else if (card.leitnerBox > newCount) {
+        target = newCount; // sa boîte n'existe plus
+      } else {
+        continue; // rien à faire
+      }
+      if (target == card.leitnerBox) continue;
+
+      final updated = card.copyWith(
+        leitnerBox: target,
+        nextReviewAt: target > newCount
+            ? card.nextReviewAt // maîtrisée : on garde l'échéance lointaine
+            : _leitnerSettings.computeNextReview(target),
+        updatedAt: now,
+        history: [
+          ...card.history,
+          CardEvent(
+            type: CardEventType.boxesResized,
+            fromBox: card.leitnerBox,
+            toBox: target,
+            at: now,
+          ),
+        ],
+      );
+      _cards[i] = updated;
+      changed.add(updated);
+    }
+
+    if (changed.isEmpty) return;
+
+    await StorageService.saveCards(_cards);
+    if (_syncCredentials.enabled && SupabaseService.isReady) {
+      await SupabaseService.upsertCards(changed);
+    }
   }
 
   // ==================== Import La Table des Savoirs ====================
