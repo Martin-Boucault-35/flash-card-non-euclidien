@@ -8,6 +8,7 @@ class StorageService {
   static const String _syncCredsKey = 'polymnesis-sync-creds';
   static const String _leitnerSettingsKey = 'polymnesis-leitner-settings';
   static const String _ltdsSettingsKey = 'polymnesis-ltds-settings';
+  static const String _importedDaysKey = 'polymnesis-imported-days';
 
   static SharedPreferences? _prefs;
 
@@ -106,5 +107,41 @@ class StorageService {
   static Future<void> saveLtdsSettings(LtdsSettings settings) async {
     if (_prefs == null) return;
     await _prefs!.setString(_ltdsSettingsKey, jsonEncode(settings.toJson()));
+  }
+
+  /// Sauvegarde le tableau « jours importés » (statuts + date de calcul), pour
+  /// ne pas le recalculer à chaque ouverture des paramètres.
+  static Future<void> saveImportedDays(
+    List<DayImportStatus> days,
+    int computedAtMillis,
+  ) async {
+    if (_prefs == null) return;
+    await _prefs!.setString(
+      _importedDaysKey,
+      jsonEncode({
+        'at': computedAtMillis,
+        'days': days.map((d) => d.toJson()).toList(),
+      }),
+    );
+  }
+
+  /// Charge le tableau mis en cache. `at` est null si jamais calculé.
+  static (List<DayImportStatus> days, int? computedAtMillis) loadImportedDays() {
+    if (_prefs == null) return (const [], null);
+
+    final String? jsonString = _prefs!.getString(_importedDaysKey);
+    if (jsonString == null) return (const [], null);
+
+    try {
+      final Map<String, dynamic> json = jsonDecode(jsonString);
+      final days = (json['days'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(DayImportStatus.fromJson)
+          .toList();
+      return (days, json['at'] as int?);
+    } catch (e) {
+      print('Error loading imported days: $e');
+      return (const [], null);
+    }
   }
 }

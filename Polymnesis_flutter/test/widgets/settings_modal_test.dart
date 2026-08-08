@@ -13,10 +13,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:polymnesis/models/day_import_status.dart';
 import 'package:polymnesis/models/sync_credentials.dart';
 import 'package:polymnesis/models/leitner_settings.dart';
 import 'package:polymnesis/models/ltds_settings.dart';
 import 'package:polymnesis/providers/card_provider.dart';
+import 'package:polymnesis/widgets/app_button.dart';
 import 'package:polymnesis/widgets/settings_modal.dart';
 
 void main() {
@@ -62,6 +64,9 @@ void main() {
     required SyncCredentials credentials,
     required LeitnerSettings leitnerSettings,
     LtdsSettings? ltdsSettings,
+    // Tableau "jours importés" (#7)
+    List<DayImportStatus> daysTable = const [],
+    Future<List<DayImportStatus>> Function()? onRefreshDays,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -88,6 +93,8 @@ void main() {
                             lastDayImported = true;
                             return importResult;
                           },
+                          importedDays: daysTable,
+                          onRefreshImportedDays: onRefreshDays,
                         ),
                       ),
                     ),
@@ -469,6 +476,111 @@ void main() {
 
       expect(importedDays, isNull);
       expect(find.textContaining('Renseigne ton jeton'), findsOneWidget);
+    });
+
+    testWidgets('tableau des jours : bouton désactivé sans sync (#7)',
+        (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(), // sync désactivée
+        leitnerSettings: LeitnerSettings(),
+        onRefreshDays: () async => const [],
+      );
+
+      await openTab(tester, 'Import');
+      await tester.ensureVisible(find.text('Jours déjà importés'));
+
+      final btn = tester.widget<AppButton>(
+        find.byKey(const ValueKey('refreshDaysButton')),
+      );
+      expect(btn.onPressed, isNull);
+      expect(find.textContaining('Nécessite la synchronisation'), findsOneWidget);
+    });
+
+    testWidgets('tableau des jours : remplit la grille et sa légende (#7)',
+        (tester) async {
+      var called = false;
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(
+            url: 'https://x.supabase.co', key: 'k', enabled: true),
+        leitnerSettings: LeitnerSettings(),
+        onRefreshDays: () async {
+          called = true;
+          return const [
+            DayImportStatus(day: 1, present: 2, total: 2), // importé
+            DayImportStatus(day: 2, present: 1, total: 3), // partiel
+            DayImportStatus(day: 3, present: 0, total: 2), // à importer
+            DayImportStatus(day: 4, present: 0, total: 0), // non joué
+          ];
+        },
+      );
+
+      await openTab(tester, 'Import');
+      await tester.ensureVisible(
+          find.byKey(const ValueKey('refreshDaysButton')));
+      await tester.tap(find.byKey(const ValueKey('refreshDaysButton')));
+      await tester.pumpAndSettle();
+
+      expect(called, isTrue);
+      // Les 4 pastilles de jour.
+      for (final d in ['1', '2', '3', '4']) {
+        expect(find.text(d), findsWidgets);
+      }
+      // Légende + compteur (1 jour complet sur 3 joués).
+      expect(find.text('importé'), findsOneWidget);
+      expect(find.text('partiel'), findsOneWidget);
+      expect(find.text('non joué'), findsOneWidget);
+      expect(find.text('1/3 jours'), findsOneWidget);
+    });
+
+    testWidgets('taper un jour pré-remplit le champ de plage (#7)',
+        (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(
+            url: 'https://x.supabase.co', key: 'k', enabled: true),
+        leitnerSettings: LeitnerSettings(),
+        daysTable: const [
+          DayImportStatus(day: 1, present: 2, total: 2),
+          DayImportStatus(day: 2, present: 0, total: 3), // à importer
+        ],
+        onRefreshDays: () async => const [],
+      );
+
+      await openTab(tester, 'Import');
+      final chip = find.text('2');
+      await tester.ensureVisible(chip);
+      await tester.tap(chip);
+      await tester.pumpAndSettle();
+
+      final range = tester.widget<TextField>(
+        find.byKey(const ValueKey('ltdsRangeField')),
+      );
+      expect(range.controller!.text, '2');
+    });
+
+    testWidgets('taper un jour NON JOUÉ ne fait rien (#7)', (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(
+            url: 'https://x.supabase.co', key: 'k', enabled: true),
+        leitnerSettings: LeitnerSettings(),
+        daysTable: const [
+          DayImportStatus(day: 1, present: 0, total: 0), // non joué
+        ],
+        onRefreshDays: () async => const [],
+      );
+
+      await openTab(tester, 'Import');
+      await tester.ensureVisible(find.text('1'));
+      await tester.tap(find.text('1'));
+      await tester.pumpAndSettle();
+
+      final range = tester.widget<TextField>(
+        find.byKey(const ValueKey('ltdsRangeField')),
+      );
+      expect(range.controller!.text, isEmpty); // rien à importer
     });
 
     testWidgets('résultat cliquable → popup des questions importées (#18)',

@@ -145,6 +145,12 @@ class _MainScreenState extends State<MainScreen> {
       (settings) => provider.updateLtdsSettings(settings),
       (days) => provider.importFromLtds(days: days),
       () => provider.importLastDay(),
+      importedDays: provider.importedDays,
+      importedDaysComputedAt: provider.importedDaysComputedAt,
+      onRefreshImportedDays: () async {
+        await provider.refreshImportedDays();
+        return provider.importedDays;
+      },
     );
   }
 
