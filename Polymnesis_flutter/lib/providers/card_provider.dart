@@ -86,6 +86,11 @@ class CardProvider extends ChangeNotifier {
   bool _isInitialized = false;
   FlashCard? _editingCard;
 
+  // Tableau "jours importés" (issue #7) — calculé depuis l'archive Supabase.
+  List<DayImportStatus> _importedDays = const [];
+  int? _importedDaysAt; // date du dernier calcul (ms epoch)
+  bool _loadingImportedDays = false;
+
   // Getters
   List<FlashCard> get cards => List.unmodifiable(_cards);
   SyncCredentials get syncCredentials => _syncCredentials;
@@ -96,6 +101,11 @@ class CardProvider extends ChangeNotifier {
   bool get isInitialized => _isInitialized;
   FlashCard? get editingCard => _editingCard;
   int get cardCount => _cards.length;
+  List<DayImportStatus> get importedDays => List.unmodifiable(_importedDays);
+  bool get loadingImportedDays => _loadingImportedDays;
+  DateTime? get importedDaysComputedAt => _importedDaysAt == null
+      ? null
+      : DateTime.fromMillisecondsSinceEpoch(_importedDaysAt!);
 
   /// Initialise le provider avec les données stockées
   Future<void> initialize() async {
@@ -116,6 +126,11 @@ class CardProvider extends ChangeNotifier {
 
     // Charger les paramètres d'import "La Table des Savoirs"
     _ltdsSettings = StorageService.loadLtdsSettings();
+
+    // Charger le tableau "jours importés" mis en cache (issue #7)
+    final (days, at) = StorageService.loadImportedDays();
+    _importedDays = days;
+    _importedDaysAt = at;
 
     // Initialiser Supabase si configuré
     if (_syncCredentials.enabled && _syncCredentials.isConfigured) {
@@ -525,6 +540,33 @@ class CardProvider extends ChangeNotifier {
     _ltdsSettings = settings;
     await StorageService.saveLtdsSettings(settings);
     notifyListeners();
+  }
+
+  /// (Re)calcule le tableau « jours importés » à partir de l'archive Supabase
+  /// et des cartes locales, puis le met en cache. Nécessite la sync active
+  /// (l'archive vit dans Supabase) ; ne touche PAS à l'API LTDS.
+  Future<void> refreshImportedDays() async {
+    if (!_syncCredentials.enabled || !SupabaseService.isReady) return;
+
+    _loadingImportedDays = true;
+    notifyListeners();
+    try {
+      final archive = await SupabaseService.fetchArchiveAnswersByDay();
+      if (archive == null) return; // erreur réseau : on garde le cache existant
+
+      final local = <String>{
+        for (final c in _cards) ...c.allAcceptedNormalized,
+      };
+      _importedDays = computeDayStatuses(
+        archiveAnswersByDay: archive,
+        localNormalizedAnswers: local,
+      );
+      _importedDaysAt = DateTime.now().millisecondsSinceEpoch;
+      await StorageService.saveImportedDays(_importedDays, _importedDaysAt!);
+    } finally {
+      _loadingImportedDays = false;
+      notifyListeners();
+    }
   }
 
   /// Importe le **dernier jour** = jour courant − 1. On vise la veille plutôt

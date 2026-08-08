@@ -138,4 +138,41 @@ class SupabaseService {
       return false;
     }
   }
+
+  /// Lit l'archive `ltds_questions` et renvoie les réponses par jour.
+  ///
+  /// Ne récupère que les colonnes `day` et `answer` (léger), et **pagine** :
+  /// l'archive dépasse la limite par défaut de 1000 lignes de PostgREST.
+  /// Renvoie `null` si Supabase n'est pas prêt ou en cas d'erreur.
+  static Future<Map<int, List<String>>?> fetchArchiveAnswersByDay() async {
+    if (!isReady) return null;
+
+    try {
+      final byDay = <int, List<String>>{};
+      const pageSize = 1000;
+      var from = 0;
+
+      while (true) {
+        final rows = await _client!
+            .from('ltds_questions')
+            .select('day, answer')
+            .range(from, from + pageSize - 1) as List;
+
+        for (final row in rows) {
+          final m = row as Map<String, dynamic>;
+          final day = m['day'] as int?;
+          final answer = m['answer'] as String?;
+          if (day == null || answer == null) continue;
+          (byDay[day] ??= []).add(answer);
+        }
+
+        if (rows.length < pageSize) break; // dernière page
+        from += pageSize;
+      }
+      return byDay;
+    } catch (e) {
+      print('Error fetching ltds_questions archive: $e');
+      return null;
+    }
+  }
 }

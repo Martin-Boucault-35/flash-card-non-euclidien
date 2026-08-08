@@ -3,6 +3,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/services.dart';
 import '../theme/app_theme.dart';
+import '../utils/date_format.dart';
 import 'app_button.dart';
 
 /// Modal de paramètres, organisé en onglets (Sync / Import / Leitner).
@@ -20,6 +21,14 @@ class SettingsModal extends StatefulWidget {
   /// Lance l'import du dernier jour (jour courant − 1) et renvoie un résumé.
   final Future<LtdsImportResult> Function() onImportLastDay;
 
+  /// Tableau « jours importés » en cache, et date de son dernier calcul.
+  final List<DayImportStatus> importedDays;
+  final DateTime? importedDaysComputedAt;
+
+  /// Recalcule le tableau (archive Supabase ⨯ cartes locales) et le renvoie.
+  /// `null` = fonctionnalité indisponible (bouton désactivé).
+  final Future<List<DayImportStatus>> Function()? onRefreshImportedDays;
+
   const SettingsModal({
     super.key,
     required this.credentials,
@@ -30,6 +39,9 @@ class SettingsModal extends StatefulWidget {
     required this.onSaveLtds,
     required this.onImport,
     required this.onImportLastDay,
+    this.importedDays = const [],
+    this.importedDaysComputedAt,
+    this.onRefreshImportedDays,
   });
 
   static Future<void> show(
@@ -41,8 +53,11 @@ class SettingsModal extends StatefulWidget {
     LtdsSettings ltdsSettings,
     Future<void> Function(LtdsSettings) onSaveLtds,
     Future<LtdsImportResult> Function(List<int> days) onImport,
-    Future<LtdsImportResult> Function() onImportLastDay,
-  ) {
+    Future<LtdsImportResult> Function() onImportLastDay, {
+    List<DayImportStatus> importedDays = const [],
+    DateTime? importedDaysComputedAt,
+    Future<List<DayImportStatus>> Function()? onRefreshImportedDays,
+  }) {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -56,6 +71,9 @@ class SettingsModal extends StatefulWidget {
         onSaveLtds: onSaveLtds,
         onImport: onImport,
         onImportLastDay: onImportLastDay,
+        importedDays: importedDays,
+        importedDaysComputedAt: importedDaysComputedAt,
+        onRefreshImportedDays: onRefreshImportedDays,
       ),
     );
   }
@@ -87,9 +105,17 @@ class _SettingsModalState extends State<SettingsModal>
   bool _importIsError = false;
   List<ImportedQuestion> _importedQuestions = const [];
 
+  // Tableau "jours importés" (#7)
+  late List<DayImportStatus> _days;
+  DateTime? _daysAt;
+  bool _refreshingDays = false;
+  String? _daysError;
+
   @override
   void initState() {
     super.initState();
+    _days = widget.importedDays;
+    _daysAt = widget.importedDaysComputedAt;
     _tabController = TabController(length: 3, vsync: this);
     _urlController = TextEditingController(text: widget.credentials.url);
     _keyController = TextEditingController(text: widget.credentials.key);
@@ -844,8 +870,217 @@ class _SettingsModalState extends State<SettingsModal>
             );
           }),
         ],
+
+        const SizedBox(height: 20),
+        const Divider(color: AppColors.slate700, height: 1),
+        const SizedBox(height: 16),
+        _buildImportedDaysSection(),
       ],
     );
+  }
+
+  // ---- Tableau des jours déjà importés (#7) ----
+
+  Widget _buildImportedDaysSection() {
+    // Le tableau se calcule depuis l'archive Supabase : sans sync, impossible.
+    final available =
+        widget.onRefreshImportedDays != null && widget.credentials.enabled;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.calendar_month, size: 18, color: AppColors.indigo400),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Jours déjà importés',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            if (_days.isNotEmpty)
+              Text(
+                '${_days.where((d) => d.state == DayImportState.fullyImported).length}'
+                '/${_days.where((d) => d.total > 0).length} jours',
+                style: const TextStyle(fontSize: 12, color: AppColors.slate400),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          available
+              ? 'Comparé à l\'archive Supabase.'
+              : 'Nécessite la synchronisation Supabase (l\'archive y est stockée).',
+          style: const TextStyle(fontSize: 12, color: AppColors.slate400),
+        ),
+        const SizedBox(height: 10),
+
+        SizedBox(
+          width: double.infinity,
+          child: AppButton(
+            key: const ValueKey('refreshDaysButton'),
+            variant: AppButtonVariant.secondary,
+            onPressed: (available && !_refreshingDays) ? _handleRefreshDays : null,
+            child: _refreshingDays
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.refresh, size: 18),
+                      SizedBox(width: 8),
+                      Text('Remplir le tableau'),
+                    ],
+                  ),
+          ),
+        ),
+
+        if (_daysError != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            _daysError!,
+            style: const TextStyle(fontSize: 12, color: AppColors.red400),
+          ),
+        ],
+
+        if (_days.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          // Légende
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            children: [
+              _dayLegend(DayImportState.fullyImported, 'importé'),
+              _dayLegend(DayImportState.partial, 'partiel'),
+              _dayLegend(DayImportState.notImported, 'à importer'),
+              _dayLegend(DayImportState.notPlayed, 'non joué'),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: _days.map(_dayChip).toList(),
+          ),
+          if (_daysAt != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Calculé le ${formatEventDate(_daysAt!.millisecondsSinceEpoch)}',
+              style: const TextStyle(fontSize: 11, color: AppColors.slate500),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  /// Couleurs d'un état de jour : (fond, texte).
+  (Color, Color) _dayColors(DayImportState state) {
+    switch (state) {
+      case DayImportState.fullyImported:
+        return (AppColors.emerald900.withValues(alpha: 0.6), AppColors.emerald400);
+      case DayImportState.partial:
+        return (AppColors.amber900.withValues(alpha: 0.5), AppColors.amber200);
+      case DayImportState.notImported:
+        return (AppColors.slate700.withValues(alpha: 0.7), AppColors.slate200);
+      case DayImportState.notPlayed:
+        return (AppColors.slate900, AppColors.slate600);
+    }
+  }
+
+  Widget _dayLegend(DayImportState state, String label) {
+    final (bg, fg) = _dayColors(state);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(3),
+            border: Border.all(color: fg.withValues(alpha: 0.6), width: 0.5),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(label,
+            style: const TextStyle(fontSize: 11, color: AppColors.slate400)),
+      ],
+    );
+  }
+
+  /// Une pastille de jour. Taper un jour JOUÉ pré-remplit le champ de plage.
+  Widget _dayChip(DayImportStatus status) {
+    final (bg, fg) = _dayColors(status.state);
+    final played = status.total > 0;
+
+    return InkWell(
+      onTap: played ? () => _pickDay(status.day) : null,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: 34,
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: fg.withValues(alpha: 0.5), width: 0.5),
+        ),
+        child: Text(
+          '${status.day}',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: fg,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Met le jour choisi dans le champ de plage, prêt à importer.
+  void _pickDay(int day) {
+    setState(() {
+      _rangeController.text = '$day';
+      _importMessage = null;
+      _importedQuestions = const [];
+    });
+  }
+
+  /// Recalcule le tableau des jours (archive Supabase ⨯ cartes locales).
+  Future<void> _handleRefreshDays() async {
+    final refresh = widget.onRefreshImportedDays;
+    if (refresh == null) return;
+
+    setState(() {
+      _refreshingDays = true;
+      _daysError = null;
+    });
+    try {
+      final days = await refresh();
+      if (!mounted) return;
+      setState(() {
+        _days = days;
+        _daysAt = DateTime.now();
+        if (days.isEmpty) {
+          _daysError = 'Archive vide : lance le workflow « Archive LTDS ».';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _daysError = 'Impossible de lire l\'archive : $e');
+    } finally {
+      if (mounted) setState(() => _refreshingDays = false);
+    }
   }
 
   /// Import du dernier jour : sauve le jeton puis délègue à onImportLastDay.
