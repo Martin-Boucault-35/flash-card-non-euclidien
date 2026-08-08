@@ -8,21 +8,38 @@ name: Version check
 #   type: tech       -> libre (bump ou pas ; couvre l'infra ET les PR de release)
 # Exactement 1 label "type:" est requis.
 #
-# Se relance aussi quand on ajoute/retire un label (types: labeled/unlabeled),
-# sinon un label posé après l'ouverture ne re-déclencherait pas le check.
+# Se relance quand on ajoute/retire un label (types: labeled/unlabeled), sinon
+# un label posé après l'ouverture ne re-déclencherait pas le check.
+#
+# `opened` est volontairement ABSENT : à la création d'une PR les labels ne sont
+# pas encore posés (gh les ajoute juste après), ce run échouait donc toujours.
+# Conséquence assumée : une PR sans label `type:` ne rapporte jamais ce check
+# et reste bloquée au merge — ce qui est exactement le but du garde-fou.
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [synchronize, reopened, labeled, unlabeled]
+
+# Poser N labels déclenche N événements (GitHub ne sait pas filtrer sur le nom
+# du label dans `on:`). Seul le DERNIER run compte — il voit tous les labels —
+# donc les précédents, devenus obsolètes, sont annulés.
+concurrency:
+  group: version-check-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   version-check:
-    # Le bump de version ne compte que pour une release (merge vers main).
-    # On n'exige donc ce check que sur les PR ciblant main — pas sur les
-    # sous-PR d'une branche épique (base ≠ main).
+    # Le bump de version ne compte que pour une release (merge vers main) :
+    # on n'exige pas ce check sur les sous-PR d'une branche épique (base ≠ main).
+    #
+    # NE PAS filtrer ici sur le NOM du label : chaque run relit la liste
+    # COMPLÈTE des labels, ces exécutions sont donc des re-validations, pas des
+    # doublons. Et surtout, un job `skipped` est compté comme RÉUSSI par les
+    # checks obligatoires — conditionner ce job le rendrait contournable
+    # (constaté : PR mergeable alors que rien n'avait été vérifié).
     if: github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     env:
