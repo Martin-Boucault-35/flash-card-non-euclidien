@@ -9,6 +9,8 @@ class StorageService {
   static const String _leitnerSettingsKey = 'polymnesis-leitner-settings';
   static const String _ltdsSettingsKey = 'polymnesis-ltds-settings';
   static const String _importedDaysKey = 'polymnesis-imported-days';
+  static const String _leitnerUpdatedAtKey = 'polymnesis-leitner-updated-at';
+  static const String _ltdsUpdatedAtKey = 'polymnesis-ltds-updated-at';
 
   static SharedPreferences? _prefs;
 
@@ -107,6 +109,25 @@ class StorageService {
   static Future<void> saveLtdsSettings(LtdsSettings settings) async {
     if (_prefs == null) return;
     await _prefs!.setString(_ltdsSettingsKey, jsonEncode(settings.toJson()));
+  }
+
+  /// Dates de dernière modification des réglages (ms epoch), pour l'arbitrage
+  /// « le plus récent gagne » de la sync (#42). 0 = jamais modifié : au premier
+  /// pull, un distant existant gagnera (rétro-compat installs antérieures).
+  static (int leitnerAt, int ltdsAt) loadSettingsStamps() {
+    if (_prefs == null) return (0, 0);
+    return (
+      _prefs!.getInt(_leitnerUpdatedAtKey) ?? 0,
+      _prefs!.getInt(_ltdsUpdatedAtKey) ?? 0,
+    );
+  }
+
+  static Future<void> saveLeitnerStamp(int millis) async {
+    await _prefs?.setInt(_leitnerUpdatedAtKey, millis);
+  }
+
+  static Future<void> saveLtdsStamp(int millis) async {
+    await _prefs?.setInt(_ltdsUpdatedAtKey, millis);
   }
 
   /// Sauvegarde le tableau « jours importés » (statuts + date de calcul), pour

@@ -91,6 +91,11 @@ class CardProvider extends ChangeNotifier {
   int? _importedDaysAt; // date du dernier calcul (ms epoch)
   bool _loadingImportedDays = false;
 
+  // Dates de dernière modification des réglages (ms epoch), pour l'arbitrage
+  // « le plus récent gagne » de la sync des réglages (#42). 0 = jamais modifié.
+  int _leitnerUpdatedAt = 0;
+  int _ltdsUpdatedAt = 0;
+
   // Getters
   List<FlashCard> get cards => List.unmodifiable(_cards);
   SyncCredentials get syncCredentials => _syncCredentials;
@@ -126,6 +131,11 @@ class CardProvider extends ChangeNotifier {
 
     // Charger les paramètres d'import "La Table des Savoirs"
     _ltdsSettings = StorageService.loadLtdsSettings();
+
+    // Charger les horloges des réglages (sync des réglages, #42)
+    final (leitnerAt, ltdsAt) = StorageService.loadSettingsStamps();
+    _leitnerUpdatedAt = leitnerAt;
+    _ltdsUpdatedAt = ltdsAt;
 
     // Charger le tableau "jours importés" mis en cache (issue #7)
     final (days, at) = StorageService.loadImportedDays();
@@ -244,6 +254,10 @@ class CardProvider extends ChangeNotifier {
         if (result.remoteOrphanIds.isNotEmpty) {
           await SupabaseService.deleteCards(result.remoteOrphanIds);
         }
+
+        // Les réglages suivent le même cycle que les cartes (#42).
+        await _syncSettings();
+
         _syncError = false;
       } else {
         _syncError = true; // fetch a échoué (Supabase injoignable/en pause ?)
@@ -256,6 +270,72 @@ class CardProvider extends ChangeNotifier {
     _isSyncing = false;
     notifyListeners();
   }
+
+  /// Enveloppe locale des réglages synchronisés (#42).
+  SyncedSettings get _localSettings => SyncedSettings(
+        leitner: _leitnerSettings,
+        leitnerUpdatedAt: _leitnerUpdatedAt,
+        ltds: _ltdsSettings,
+        ltdsUpdatedAt: _ltdsUpdatedAt,
+      );
+
+  /// Synchronise les réglages avec la table `user_settings` : chaque section
+  /// (Leitner / jeton LTDS) suit sa propre horloge, la plus récente gagne.
+  Future<void> _syncSettings() async {
+    // Rétro-compat : les réglages existaient avant leurs timestamps. Un réglage
+    // NON PAR DÉFAUT sans timestamp est revendiqué « modifié maintenant », pour
+    // que l'appareil historique pousse ses vrais réglages au premier passage.
+    // (Un état 100 % par défaut reste à 0 : rien à revendiquer — c'est ce qui
+    // évite qu'une install neuve écrase les réglages d'un appareil historique.)
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (_leitnerUpdatedAt == 0 && !_isDefaultLeitner(_leitnerSettings)) {
+      _leitnerUpdatedAt = now;
+      await StorageService.saveLeitnerStamp(now);
+    }
+    if (_ltdsUpdatedAt == 0 && _ltdsSettings.isConfigured) {
+      _ltdsUpdatedAt = now;
+      await StorageService.saveLtdsStamp(now);
+    }
+
+    final remote = await SupabaseService.fetchUserSettings();
+    final local = _localSettings;
+
+    if (remote == null) {
+      // Ligne absente (première sync) : ne pousser que s'il y a quelque chose.
+      if (local.leitnerUpdatedAt > 0 || local.ltdsUpdatedAt > 0) {
+        await SupabaseService.upsertUserSettings(local);
+      }
+      return;
+    }
+
+    await applyRemoteSettings(remote);
+
+    // Pousse le résultat si au moins une section locale était plus récente.
+    if (local.newerThan(remote)) {
+      await SupabaseService.upsertUserSettings(local.merge(remote));
+    }
+  }
+
+  /// Applique les sections de [remote] plus récentes que l'état local.
+  /// Séparé de [_syncSettings] pour être testable sans réseau.
+  @visibleForTesting
+  Future<void> applyRemoteSettings(SyncedSettings remote) async {
+    if (remote.leitnerUpdatedAt > _leitnerUpdatedAt) {
+      // Même chemin qu'une saisie : persiste + remappe les boîtes si besoin.
+      await _applyLeitnerSettings(remote.leitner,
+          stamp: remote.leitnerUpdatedAt);
+    }
+    if (remote.ltdsUpdatedAt > _ltdsUpdatedAt) {
+      _ltdsSettings = remote.ltds;
+      _ltdsUpdatedAt = remote.ltdsUpdatedAt;
+      await StorageService.saveLtdsSettings(remote.ltds);
+      await StorageService.saveLtdsStamp(remote.ltdsUpdatedAt);
+    }
+  }
+
+  static bool _isDefaultLeitner(LeitnerSettings s) =>
+      listEquals(s.intervals, LeitnerSettings.defaultIntervals) &&
+      s.goldenSeconds == LeitnerSettings.defaultGoldenSeconds;
 
   /// Ajoute ou met à jour une carte
   Future<void> saveCard(FlashCard card) async {
@@ -458,17 +538,43 @@ class CardProvider extends ChangeNotifier {
 
   /// Met à jour les paramètres Leitner
   Future<void> updateLeitnerSettings(LeitnerSettings settings) async {
+    // Rien n'a changé : ne pas avancer l'horloge de sync pour un simple
+    // ré-enregistrement (sinon il « gagnerait » contre une vraie modification
+    // faite sur un autre appareil).
+    final changed = !listEquals(settings.intervals, _leitnerSettings.intervals) ||
+        settings.goldenSeconds != _leitnerSettings.goldenSeconds;
+
+    if (changed) {
+      await _applyLeitnerSettings(settings,
+          stamp: DateTime.now().millisecondsSinceEpoch);
+      await _pushSettings();
+    }
+    notifyListeners();
+  }
+
+  /// Applique des réglages Leitner (saisie locale OU pull distant) : persiste,
+  /// horodate, et REMAPPE les cartes si le nombre de boîtes change — un pull
+  /// doit suivre exactement le même chemin qu'une saisie (#23), sinon des
+  /// cartes resteraient dans des boîtes qui n'existent plus.
+  Future<void> _applyLeitnerSettings(LeitnerSettings settings,
+      {required int stamp}) async {
     final oldCount = _leitnerSettings.boxCount;
     final newCount = settings.boxCount;
 
     _leitnerSettings = settings;
+    _leitnerUpdatedAt = stamp;
     await StorageService.saveLeitnerSettings(settings);
+    await StorageService.saveLeitnerStamp(stamp);
 
     if (newCount != oldCount) {
       await _remapCardsToBoxes(oldCount: oldCount, newCount: newCount);
     }
+  }
 
-    notifyListeners();
+  /// Pousse l'état local des réglages vers Supabase (si la sync est prête).
+  Future<void> _pushSettings() async {
+    if (!_syncCredentials.enabled || !SupabaseService.isReady) return;
+    await SupabaseService.upsertUserSettings(_localSettings);
   }
 
   /// Replace les cartes quand le nombre de boîtes change.
@@ -537,8 +643,18 @@ class CardProvider extends ChangeNotifier {
 
   /// Met à jour les paramètres d'import (jeton).
   Future<void> updateLtdsSettings(LtdsSettings settings) async {
+    // Le jeton est re-sauvé avant chaque import : n'avancer l'horloge de sync
+    // que s'il a réellement changé.
+    final changed = settings.token.trim() != _ltdsSettings.token.trim();
+
     _ltdsSettings = settings;
     await StorageService.saveLtdsSettings(settings);
+
+    if (changed) {
+      _ltdsUpdatedAt = DateTime.now().millisecondsSinceEpoch;
+      await StorageService.saveLtdsStamp(_ltdsUpdatedAt);
+      await _pushSettings();
+    }
     notifyListeners();
   }
 

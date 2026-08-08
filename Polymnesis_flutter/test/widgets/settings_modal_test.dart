@@ -478,6 +478,21 @@ void main() {
       expect(find.textContaining('Renseigne ton jeton'), findsOneWidget);
     });
 
+    testWidgets('l\'onglet Sync explique la portée « compte » de la sync (#42)',
+        (tester) async {
+      await pumpModal(
+        tester,
+        credentials: SyncCredentials(),
+        leitnerSettings: LeitnerSettings(),
+      );
+
+      // L'onglet Sync est celui par défaut.
+      expect(
+        find.textContaining('restaure tout'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('tableau des jours : bouton désactivé sans sync (#7)',
         (tester) async {
       await pumpModal(

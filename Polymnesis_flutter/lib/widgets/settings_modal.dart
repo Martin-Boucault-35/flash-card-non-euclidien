@@ -443,6 +443,14 @@ class _SettingsModalState extends State<SettingsModal>
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        // Le projet Supabase fait office de « compte » (#42).
+        const Text(
+          'La synchronisation couvre les cartes, les réglages Leitner et le '
+          'jeton d\'import : saisir ces identifiants sur un nouvel appareil '
+          'restaure tout.',
+          style: TextStyle(fontSize: 12, color: AppColors.slate500),
+        ),
       ],
     );
   }

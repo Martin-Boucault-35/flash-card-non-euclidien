@@ -6,6 +6,11 @@ class SupabaseService {
   static SupabaseClient? _client;
   static bool _isInitialized = false;
 
+  // Credentials du client courant, pour détecter un vrai changement de projet
+  // dans [reinitialize] (et non re-créer un client à l'identique).
+  static String _currentUrl = '';
+  static String _currentKey = '';
+
   /// Initialise le client Supabase avec les credentials fournis
   static Future<bool> initialize(SyncCredentials creds) async {
     if (!creds.enabled || !creds.isConfigured) {
@@ -21,6 +26,8 @@ class SupabaseService {
       );
       _client = Supabase.instance.client;
       _isInitialized = true;
+      _currentUrl = creds.url;
+      _currentKey = creds.key;
       return true;
     } catch (e) {
       print('Failed to init Supabase: $e');
@@ -30,7 +37,12 @@ class SupabaseService {
     }
   }
 
-  /// Réinitialise le client avec de nouveaux credentials
+  /// Réinitialise le client avec de nouveaux credentials.
+  ///
+  /// Si un client existe déjà pour les MÊMES url/clé, on ne fait rien. S'ils
+  /// ont changé (restauration d'un autre « compte » en cours de session), on
+  /// jette l'instance et on en recrée une — sinon la sync continuerait en
+  /// silence contre l'ancien projet.
   static Future<bool> reinitialize(SyncCredentials creds) async {
     if (!creds.enabled || !creds.isConfigured) {
       _client = null;
@@ -39,22 +51,32 @@ class SupabaseService {
     }
 
     try {
-      // Si déjà initialisé avec les mêmes credentials, ne rien faire
       if (_isInitialized && _client != null) {
-        return true;
+        if (creds.url == _currentUrl && creds.key == _currentKey) {
+          return true; // mêmes credentials : rien à faire
+        }
+        // Changement de projet : il faut détruire l'instance globale d'abord
+        // (Supabase.initialize refuse une double initialisation).
+        _client = null;
+        _isInitialized = false;
+        await Supabase.instance.dispose();
       }
 
-      // Sinon, on réinitialise
       await Supabase.initialize(
         url: creds.url,
         anonKey: creds.key,
       );
       _client = Supabase.instance.client;
       _isInitialized = true;
+      _currentUrl = creds.url;
+      _currentKey = creds.key;
       return true;
     } catch (e) {
-      // Si déjà initialisé avec une erreur, on log et on retourne false
+      // Échec (ex. dispose impossible sur cette plateforme) : état "non prêt",
+      // le bandeau d'erreur sync existant s'affichera ; un redémarrage suffit.
       print('Failed to reinit Supabase: $e');
+      _client = null;
+      _isInitialized = false;
       return false;
     }
   }
@@ -135,6 +157,47 @@ class SupabaseService {
       return true;
     } catch (e) {
       print('Error bulk deleting cards: $e');
+      return false;
+    }
+  }
+
+  /// Id de la ligne de réglages. 'default' tant que l'app est mono-utilisateur ;
+  /// deviendra un user_id avec les vrais comptes (option A).
+  static const String settingsRowId = 'default';
+
+  /// Récupère les réglages synchronisés. `null` si la ligne n'existe pas
+  /// encore, si la table est absente, ou en cas d'erreur réseau.
+  static Future<SyncedSettings?> fetchUserSettings() async {
+    if (!isReady) return null;
+
+    try {
+      final row = await _client!
+          .from('user_settings')
+          .select('data')
+          .eq('id', settingsRowId)
+          .maybeSingle();
+      final data = row?['data'];
+      if (data is! Map<String, dynamic>) return null;
+      return SyncedSettings.fromJson(data);
+    } catch (e) {
+      print('Error fetching user settings: $e');
+      return null;
+    }
+  }
+
+  /// Pousse les réglages synchronisés (upsert de la ligne unique).
+  static Future<bool> upsertUserSettings(SyncedSettings settings) async {
+    if (!isReady) return false;
+
+    try {
+      await _client!.from('user_settings').upsert({
+        'id': settingsRowId,
+        'data': settings.toJson(),
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+      return true;
+    } catch (e) {
+      print('Error upserting user settings: $e');
       return false;
     }
   }
